@@ -24,6 +24,9 @@ public class PolicyTest
         cutoffIsNullWhileFloorIsAhead();
         daysLeftRoundsUp();
         statusBands();
+        crossedFindsEachThresholdOnce();
+        crossedStartsAtPolicyDate();
+        crossedFollowsAPageThatMoves();
 
         System.out.println(passes + " passed, " + failures + " failed");
         System.exit(failures == 0 ? 0 : 1);
@@ -148,5 +151,48 @@ public class PolicyTest
         check("within 60 days", "warning", p.status(Policy.addDays(now, 8), now));
         check("edge of 60 days", "warning", p.status(Policy.addDays(now, 60), now));
         check("beyond 60 days", "ok", p.status(Policy.addDays(now, 61), now));
+    }
+
+    static void crossedFindsEachThresholdOnce()
+    {
+        Policy p = new Policy(60, days(60, 30, 7), null);
+        Date expiry = at(2027, 1, 1);
+        // Thresholds fall on 2 Nov, 2 Dec and 25 Dec 2026.
+        check("nothing before the first", 0, p.crossed(expiry, at(2026, 10, 1), at(2026, 11, 1)).size());
+        check("first threshold", days(60), p.crossed(expiry, at(2026, 11, 1), at(2026, 11, 3)));
+        check("window start is exclusive", 0, p.crossed(expiry, at(2026, 11, 2), at(2026, 11, 3)).size());
+        check("window end is inclusive", days(30), p.crossed(expiry, at(2026, 12, 1), at(2026, 12, 2)));
+        check("missed days catch up", days(30, 7), p.crossed(expiry, at(2026, 12, 1), at(2026, 12, 31)));
+        check("all three in one long gap", days(60, 30, 7), p.crossed(expiry, at(2026, 10, 1), at(2027, 1, 5)));
+        // Consecutive daily windows never repeat or skip a threshold.
+        int total = 0;
+        Date from = at(2026, 10, 1);
+        for (int i = 1; i <= 120; i++) {
+            Date to = Policy.addDays(from, 1);
+            total += p.crossed(expiry, from, to).size();
+            from = to;
+        }
+        check("daily windows see each threshold once", 3, total);
+    }
+
+    static void crossedStartsAtPolicyDate()
+    {
+        // Floor-bound pages expire exactly policy date + longest warning, so the first warning
+        // is due at the policy date itself. The engine starts the first window one second early.
+        Date policy = at(2026, 11, 9, 9, 0);
+        Policy p = new Policy(60, days(60, 30, 7), policy);
+        Date expiry = p.expiry(at(2019, 1, 1), policy);
+        Date oneSecondBefore = new Date(policy.getTime() - 1000L);
+        check("first warning at policy date", days(60), p.crossed(expiry, oneSecondBefore, policy));
+        check("missed without the extra second", 0, p.crossed(expiry, policy, Policy.addDays(policy, 1)).size());
+    }
+
+    static void crossedFollowsAPageThatMoves()
+    {
+        Policy p = new Policy(60, days(60, 30, 7), null);
+        Date now = at(2026, 11, 9);
+        // A page edited today expires in 60 months, far outside every warning.
+        Date expiry = p.expiry(now, now);
+        check("freshly edited page has nothing to warn", 0, p.crossed(expiry, at(2026, 11, 1), now).size());
     }
 }

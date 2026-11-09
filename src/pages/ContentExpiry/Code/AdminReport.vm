@@ -38,6 +38,16 @@
     <p class="ce-note">No warnings have been sent, so if warnings were switched on today the earliest anything could expire is #ceDate($ceSummary.floorDate), after the full ${ceMaxWarning}-day warning. The dates below assume that.</p>
   #end
 
+  #if ($s.active)
+    <p class="ce-note">
+      #if ($ceSummary.lastRun)
+        The daily job last finished on $escapetool.xml($xwiki.formatDate($ceSummary.lastRun, 'd MMM yyyy HH:mm')) as $escapetool.xml($ceSummary.jobUser). $escapetool.xml($ceSummary.lastResult)
+      #else
+        The daily job has not completed a run yet. It runs at 03:17 as $escapetool.xml($ceSummary.jobUser).
+      #end
+    </p>
+  #end
+
   <ul class="ce-cards">
     <li><span class="ce-card-number">$ceSummary.covered</span><span class="ce-card-label">pages covered</span></li>
     <li><span class="ce-card-number">$ceSummary.stale</span><span class="ce-card-label">unchanged for $s.retentionMonths months or more</span></li>

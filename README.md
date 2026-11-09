@@ -1,16 +1,17 @@
 # Content Expiry for XWiki
 
 Deletes pages that nobody has changed for a set time (5 years by default), after warning their owners.
-Admins configure it in Administration. Owners will get emails and a one-click Keep button.
+Admins configure it in Administration. Owners get emails and a one-click Keep button.
 
-**Status: 0.1, report only.** This version lists what would expire and who would be warned. It sends no emails and deletes nothing. Warnings, the Keep button and deletion come in later versions; see [docs/design.md](docs/design.md) for the plan.
+**Status: 0.2, warn only.** It lists what would expire, emails page owners before the expiry date, and shows a banner with a Keep button on pages that are close to it. It deletes nothing yet: deletion comes in 0.3. See [docs/design.md](docs/design.md) for the plan.
 
 Built entirely from wiki pages (Velocity, plus a Groovy engine). No Java to compile.
 
 ## Requirements
 
-- Written for XWiki 17.10 LTS and 18.x. Older versions may work but haven't been checked. Smoke-tested on XWiki 17.10.14 (standalone Jetty and HSQLDB), installed by the superadmin account. Not yet tested on a production-style setup or with a normal admin account.
-- An admin account **with programming rights** to install it. The engine is Groovy, and XWiki only runs Groovy from pages saved by such a user.
+- Written for XWiki 17.10 LTS and 18.x. Older versions may work but haven't been checked. Tested on XWiki 17.10.14 (standalone Jetty and HSQLDB) with the suite in `tests/live`. 18.x hasn't been run. The XAR was always imported by the superadmin account, never by a normal admin with programming rights.
+- An admin account **with programming rights** to install it. The engine and the UI extensions run code, and XWiki only runs that from pages saved by such a user.
+- Outgoing mail working in XWiki (Administration > Mail), for warn mode.
 
 ## Install
 
@@ -27,8 +28,21 @@ Import the new XAR over the old one. Your settings are on `ContentExpiry.Code.Se
 
 ## Use
 
-- **Administration > Content > Content expiry**: turn it on and set the retention period, warnings, which spaces it covers and which pages are exempt.
-- **Administration > Content > Content expiry report**: counts, and a table of pages with when they were last changed, when they would expire and who would be warned.
+- **Administration > Content > Content expiry**: turn it on, pick the mode, and set the retention period, warning days, which spaces it covers, which pages are exempt, the fallback contact and the sender address.
+- **Administration > Content > Content expiry report**: counts, when the daily job last ran and what it did, and a table of pages with when they were last changed, when they expire and who is warned.
+- **Under every covered page**: a banner with a **Keep this page** button once the page is inside its warning window, and an **Expiry** tab where anyone who can edit the page can set its owner.
+
+Go-live is meant to be: install, leave it in report-only mode for a few weeks and read the report, adjust exclusions, then switch to warn only.
+
+### Warnings
+
+In warn mode a scheduled job (Administration > Scheduler, "Content Expiry daily run", 03:17) emails owners when a page passes a warning threshold, 60, 30 and 7 days before expiry by default. Each person gets one email per run listing all their pages. A missed day is caught up on the next run and nothing is sent twice. An email that fails (mail server down, bad address) is retried on each later run for 14 days.
+
+Who is warned: the page's owner (Expiry tab), else its creator, else its last editor, skipping anyone who is disabled or has no email address; if none of them can be emailed, the fallback contact (a user, a group or an address). Pages with child pages and excluded pages are not warned about.
+
+The job runs as the admin who last saved the settings, and stops working if that account loses admin rights. If warnings stop, check Administration > Scheduler.
+
+**Keep** saves the page as a minor edit with the comment "Kept by Content Expiry", which restarts the clock and leaves a line in the page history. It records the person who clicked as the page's author and leaves the content author alone.
 
 The clock is the page's last-modified date, so any save restarts it. Nothing can expire until the longest warning period has passed after warnings are switched on, so every owner gets every warning even on the first run.
 
@@ -40,7 +54,11 @@ Always excluded, whatever the settings: hidden pages; the `XWiki`, `Scheduler`, 
 python3 build.py                  # builds dist/content-expiry-<version>.xar
 python3 build.py --check          # validates without writing dist/
 python3 tests/run_policy_tests.py # unit tests for the date logic (needs a JDK)
+tests/live/start-xwiki.sh         # throwaway XWiki 17.10 plus a mail capture server
+tests/live/run-all.sh             # builds, then runs the live tests against it
 ```
+
+The live tests are described in [tests/live/README.md](tests/live/README.md).
 
 Python 3.11+ standard library only.
 
@@ -62,17 +80,21 @@ Page sources are normal XWiki page XML with three shortcuts, so they stay short 
 
 | Page | What it is |
 |---|---|
-| `ContentExpiry.Code.Engine` | Groovy engine: settings, queries, report, policy date logic |
+| `ContentExpiry.Code.Engine` | Groovy engine: settings, queries, report, daily run, email, Keep, owner, policy date logic |
 | `ContentExpiry.Code.Admin` | Registers the two admin sections; holds the stylesheet |
 | `ContentExpiry.Code.AdminSettingsSheet` / `AdminReportSheet` | Velocity for the two sections |
 | `ContentExpiry.Code.Macros` | Shared Velocity macros |
-| `ContentExpiry.Code.ConfigClass` / `StateClass` | Classes for settings and engine bookkeeping |
+| `ContentExpiry.Code.ConfigClass` / `StateClass` / `OwnerClass` | Classes for settings, engine bookkeeping and the per-page owner |
+| `ContentExpiry.Code.PageUI` | UI extensions: the banner and actions under the page title, and the Expiry tab |
+| `ContentExpiry.Code.Job` | The daily scheduler job |
+| `ContentExpiry.Code.MailTemplate` | The warning email (an `XWiki.Mail` object) |
 | `ContentExpiry.Code.Translations` | Admin section names |
 | `ContentExpiry.WebPreferences` | Space rights: only admins can edit |
 
 ### Rules for the engine
 
-- Every public method in the engine checks for wiki admin rights. `parseGroovyFromPage` only checks who saved the engine page, not who is calling it.
+- Every public method in the engine checks rights itself. `parseGroovyFromPage` only checks who saved the engine page, not who is calling it. Admin methods need wiki admin rights; `bannerFor`, `pageInfo`, `keep` and `setOwner` are for ordinary users and check that user's own view or edit right on the page.
+- Pages the engine saves for a user (Keep, owner) change the author but never the content author, so a page's scripts don't run with a different person's rights.
 - The `Policy` class inside the engine must stay valid Java as well as Groovy, so the tests can compile it with `javac`. The test runner rejects `$`, single-quoted literals and `/` division in it.
 
 ## Licence

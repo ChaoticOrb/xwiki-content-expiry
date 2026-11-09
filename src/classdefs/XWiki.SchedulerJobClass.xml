@@ -1,0 +1,95 @@
+<class>
+  <name>XWiki.SchedulerJobClass</name>
+  <customClass />
+  <customMapping />
+  <defaultViewSheet />
+  <defaultEditSheet />
+  <defaultWeb />
+  <nameField />
+  <validationScript />
+  <contextDatabase>
+    <disabled>0</disabled>
+    <name>contextDatabase</name>
+    <number>9</number>
+    <prettyName>Job execution context database</prettyName>
+    <size>30</size>
+    <unmodifiable>0</unmodifiable>
+    <classType>com.xpn.xwiki.objects.classes.StringClass</classType>
+  </contextDatabase>
+  <contextLang>
+    <disabled>0</disabled>
+    <name>contextLang</name>
+    <number>8</number>
+    <prettyName>Job execution context lang</prettyName>
+    <size>30</size>
+    <unmodifiable>0</unmodifiable>
+    <classType>com.xpn.xwiki.objects.classes.StringClass</classType>
+  </contextLang>
+  <contextUser>
+    <disabled>0</disabled>
+    <name>contextUser</name>
+    <number>7</number>
+    <prettyName>Job execution context user</prettyName>
+    <size>30</size>
+    <unmodifiable>0</unmodifiable>
+    <classType>com.xpn.xwiki.objects.classes.StringClass</classType>
+  </contextUser>
+  <cron>
+    <disabled>0</disabled>
+    <name>cron</name>
+    <number>5</number>
+    <prettyName>Cron Expression</prettyName>
+    <size>30</size>
+    <unmodifiable>0</unmodifiable>
+    <classType>com.xpn.xwiki.objects.classes.StringClass</classType>
+  </cron>
+  <jobClass>
+    <disabled>0</disabled>
+    <name>jobClass</name>
+    <number>3</number>
+    <prettyName>Job Class</prettyName>
+    <size>60</size>
+    <unmodifiable>0</unmodifiable>
+    <classType>com.xpn.xwiki.objects.classes.StringClass</classType>
+  </jobClass>
+  <jobDescription>
+    <disabled>0</disabled>
+    <name>jobDescription</name>
+    <number>2</number>
+    <prettyName>Job Description</prettyName>
+    <rows>10</rows>
+    <size>45</size>
+    <unmodifiable>0</unmodifiable>
+    <classType>com.xpn.xwiki.objects.classes.TextAreaClass</classType>
+  </jobDescription>
+  <jobName>
+    <disabled>0</disabled>
+    <name>jobName</name>
+    <number>1</number>
+    <prettyName>Job Name</prettyName>
+    <size>60</size>
+    <unmodifiable>0</unmodifiable>
+    <classType>com.xpn.xwiki.objects.classes.StringClass</classType>
+  </jobName>
+  <script>
+    <contenttype>PureText</contenttype>
+    <disabled>0</disabled>
+    <editor>PureText</editor>
+    <name>script</name>
+    <number>6</number>
+    <prettyName>Job Script</prettyName>
+    <rows>10</rows>
+    <size>60</size>
+    <unmodifiable>0</unmodifiable>
+    <classType>com.xpn.xwiki.objects.classes.TextAreaClass</classType>
+  </script>
+  <status>
+    <disabled>0</disabled>
+    <name>status</name>
+    <number>4</number>
+    <prettyName>Status</prettyName>
+    <size>30</size>
+    <unmodifiable>0</unmodifiable>
+    <classType>com.xpn.xwiki.objects.classes.StringClass</classType>
+  </status>
+</class>

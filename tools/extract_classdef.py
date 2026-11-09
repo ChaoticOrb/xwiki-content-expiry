@@ -21,7 +21,12 @@ def main(argv):
     root = ET.parse(argv[1]).getroot()
     for wanted in argv[2:]:
         found = None
+        own = root.find("class")
+        if own is not None and own.findtext("name") == wanted:
+            found = own  # the page defines this class itself
         for obj in root.iter("object"):
+            if found is not None:
+                break
             if obj.findtext("className") == wanted and obj.find("class") is not None:
                 found = obj.find("class")
                 break

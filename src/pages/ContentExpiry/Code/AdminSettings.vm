@@ -23,7 +23,8 @@
       'includedSpaces': "$!request.ceIncludedSpaces",
       'excludedSpaces': "$!request.ceExcludedSpaces",
       'exemptPages': "$!request.ceExemptPages",
-      'fallbackContact': "$!request.ceFallbackContact"
+      'fallbackContact': "$!request.ceFallbackContact",
+      'senderAddress': "$!request.ceSenderAddress"
     })
     #set ($ceResult = $ceEngine.saveSettings($ceInput))
     #if ($ceResult.ok)
@@ -46,7 +47,8 @@
     'includedSpaces': "$!request.ceIncludedSpaces",
     'excludedSpaces': "$!request.ceExcludedSpaces",
     'exemptPages': "$!request.ceExemptPages",
-    'fallbackContact': "$!request.ceFallbackContact"
+    'fallbackContact': "$!request.ceFallbackContact",
+    'senderAddress': "$!request.ceSenderAddress"
   })
 #else
   #set ($v = {
@@ -57,7 +59,8 @@
     'includedSpaces': $s.includedSpacesText,
     'excludedSpaces': $s.excludedSpacesText,
     'exemptPages': $s.exemptPagesText,
-    'fallbackContact': $s.fallbackContact
+    'fallbackContact': $s.fallbackContact,
+    'senderAddress': $s.senderAddress
   })
 #end
 ##
@@ -79,7 +82,7 @@
 <div class="content-expiry">
   <p class="ce-intro">Pages that nobody has changed for the retention period are listed in the
     <a href="$escapetool.xml($doc.getURL('admin', 'editor=globaladmin&section=contentExpiryReport'))">Content expiry report</a>.
-    In later versions, page owners will be warned before the expiry date and can keep a page with one click.</p>
+    In warn mode, page owners are emailed before the expiry date and can keep a page with one click. Deleting pages arrives in a later version.</p>
   <div class="ce-status">
     #if ($s.enabled)
       <span class="ce-badge ce-badge-on">On</span>
@@ -94,7 +97,9 @@
     #end
     </span>
   </div>
-  <form class="xform ce-settings" method="post" action="$escapetool.xml($doc.getURL('admin', 'editor=globaladmin&section=contentExpiry'))">
+  <form class="xform ce-settings" method="post" action="$escapetool.xml($doc.getURL('admin', 'editor=globaladmin&section=contentExpiry&forceEdit=1'))">
+    ## forceEdit: XWiki locks the admin page while any admin has a section open and refuses a second admin's POST.
+    ## This form saves to ContentExpiry.Code.Settings, not to the admin page, so that lock protects nothing here.
     <input type="hidden" name="ceAction" value="saveSettings" />
     <input type="hidden" name="form_token" value="$escapetool.xml($services.csrf.token)" />
     <dl>
@@ -111,7 +116,7 @@
       </dt>
       <dd>
         <label class="ce-radio"><input type="radio" name="ceMode" value="report"#if ($v.mode == 'report' || "$!v.mode" == '') checked="checked"#end /> Report only: list pages, send no emails, delete nothing</label>
-        <label class="ce-radio ce-disabled"><input type="radio" name="ceMode" value="warn" disabled="disabled" /> Warn only: email page owners, delete nothing <em>(coming in a later version)</em></label>
+        <label class="ce-radio"><input type="radio" name="ceMode" value="warn"#if ($v.mode == 'warn') checked="checked"#end /> Warn only: email page owners and show a banner with a Keep button, delete nothing</label>
         <label class="ce-radio ce-disabled"><input type="radio" name="ceMode" value="delete" disabled="disabled" /> Warn and delete: email owners, then move expired pages to the recycle bin <em>(coming in a later version)</em></label>
       </dd>
 
@@ -155,9 +160,19 @@
         #ceFieldError('fallbackContact')
       </dt>
       <dd><input type="text" id="ceFallbackContact" name="ceFallbackContact" value="$escapetool.xml($v.fallbackContact)" /></dd>
+
+      <dt>
+        <label for="ceSenderAddress">Sender address</label>
+        <span class="xHint">The From address on warning emails. Leave empty to use the wiki admin email#if ("$!s.effectiveSender" != '') (currently $escapetool.xml($s.effectiveSender))#end. The wiki's mail server must be set up under Administration, Mail.</span>
+        #ceFieldError('senderAddress')
+      </dt>
+      <dd><input type="text" id="ceSenderAddress" name="ceSenderAddress" value="$escapetool.xml($v.senderAddress)" /></dd>
     </dl>
     <p><input type="submit" class="button" value="Save" /></p>
   </form>
+  #if ($s.active && "$!ceEngine.jobUser" != '')
+    <p class="ce-hint">The daily job runs at 03:17 as $escapetool.xml($ceEngine.jobUser), the admin who last saved these settings. Check it under Administration, Scheduler if warnings stop.</p>
+  #end
   <p class="ce-version">Content Expiry $escapetool.xml($ceEngine.version)</p>
 </div>
 {{/html}}

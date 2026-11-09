@@ -1,0 +1,17 @@
+Hello $recipientName,
+
+#if ($count == 1)This page on $wikiName hasn't been changed for a long time and is approaching its expiry date.#{else}These $count pages on $wikiName haven't been changed for a long time and are approaching their expiry dates.#end
+
+#foreach ($i in $items)
+* $i.title
+  $i.url
+  Last changed $i.lastModifiedText. Expires $i.expiryText#if ($i.daysLeft > 0) (in $i.daysLeft days)#end.
+
+#end
+#if ($mode == 'delete')
+When a page expires it is moved to the recycle bin, where a wiki administrator can restore it.
+#else
+This wiki is set to warn only, so nothing is deleted automatically at the moment.
+#end
+
+To keep a page, open it and click "Keep this page", or edit and save it. Either restarts the clock for $retentionMonths months. You are getting this email because you are the page's owner, creator or last editor, or the wiki's fallback contact.

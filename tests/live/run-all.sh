@@ -4,4 +4,4 @@ set -euo pipefail
 cd "$(dirname "$0")"
 export NODE_PATH="${NODE_PATH:-$(npm root -g)}"
 python3 ../../build.py
-for t in install reset seed report settings access "$@"; do echo; echo "== $t =="; node "$t.js"; done
+for t in install reset seed report settings access warn pageui job "$@"; do echo; echo "== $t =="; node "$t.js"; done

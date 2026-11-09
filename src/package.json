@@ -1,8 +1,8 @@
 {
   "artifact": "content-expiry",
   "name": "Content Expiry",
-  "description": "Lists, and in later versions deletes, pages nobody has changed for a set time, after warning their owners.",
-  "version": "0.1.0",
+  "description": "Warns the owners of pages nobody has changed for a set time, with a Keep button. Lists, and in later versions deletes, the pages that expire.",
+  "version": "0.2.0",
   "extensionId": "com.github.chaoticorb:xwiki-content-expiry",
   "licence": "MIT",
   "author": "XWiki.Admin"

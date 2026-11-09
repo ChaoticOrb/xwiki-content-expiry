@@ -54,5 +54,39 @@
       <unmodifiable>0</unmodifiable>
       <classType>com.xpn.xwiki.objects.classes.NumberClass</classType>
     </maxWarningDays>
+    <lastRun>
+      <dateFormat>yyyy-MM-dd HH:mm:ss</dateFormat>
+      <disabled>0</disabled>
+      <emptyIsToday>0</emptyIsToday>
+      <name>lastRun</name>
+      <number>5</number>
+      <picker>0</picker>
+      <prettyName>Last completed run</prettyName>
+      <size>20</size>
+      <unmodifiable>0</unmodifiable>
+      <classType>com.xpn.xwiki.objects.classes.DateClass</classType>
+    </lastRun>
+    <lastResult>
+      <disabled>0</disabled>
+      <editor>PureText</editor>
+      <name>lastResult</name>
+      <number>6</number>
+      <prettyName>Result of the last run</prettyName>
+      <rows>5</rows>
+      <size>40</size>
+      <unmodifiable>0</unmodifiable>
+      <classType>com.xpn.xwiki.objects.classes.TextAreaClass</classType>
+    </lastResult>
+    <retry>
+      <disabled>0</disabled>
+      <editor>PureText</editor>
+      <name>retry</name>
+      <number>7</number>
+      <prettyName>Warnings that failed to send and will be retried</prettyName>
+      <rows>5</rows>
+      <size>40</size>
+      <unmodifiable>0</unmodifiable>
+      <classType>com.xpn.xwiki.objects.classes.TextAreaClass</classType>
+    </retry>
   </class>
 </xwikidoc>

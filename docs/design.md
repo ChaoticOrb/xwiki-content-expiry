@@ -1,6 +1,6 @@
 # Content Expiry: design spec
 
-**Status:** v0.2 of the spec, 9 Nov 2026. Version 0.1 of the extension (report only) is built and smoke-tested on XWiki 17.10.14; nothing beyond that.
+**Status:** v0.3 of the spec, 9 Nov 2026. Versions 0.1 (report only) and 0.2 (warn only) of the extension are built and tested on XWiki 17.10.14 with `tests/live`. Nothing beyond that. 0.3 adds deletion.
 
 Pages that haven't been touched for a configurable period (default 5 years) are flagged, their owner is warned ahead of time, and if nobody keeps them they go to the XWiki recycle bin. Admins configure it from the normal Administration screen. Everyone else only sees warnings and a Keep button.
 
@@ -35,14 +35,18 @@ Without it, switching warnings on would delete every page older than the retenti
 
 **Floor = policy date + longest warning.** The policy date (on `ContentExpiry.Code.State`) is set when warnings switch on, and reset when the retention period gets shorter or the longest warning gets longer. While warnings are off (report-only mode) there is no policy date and the report measures the floor from today, so it shows what would happen if warnings started now.
 
-### Warnings (0.2)
+### Warnings (0.2, built)
 
-Default **60, 30 and 7 days** before expiry. The daily job sends a warning when a threshold falls between the previous run and now, so a missed day doesn't skip a warning. Each person gets **one digest email per run** listing all their pages that hit a threshold.
+Default **60, 30 and 7 days** before expiry. The daily job sends a warning when a threshold (expiry minus that many days) falls after the previous completed run and up to now, so a missed day doesn't skip a warning and a run never repeats one. The first window starts one second before the policy date, because floor-bound pages hit their first threshold exactly then. Each person gets **one digest email per run** listing all their pages that hit a threshold; people in a fallback group each get their own copy.
 
-### Keep (0.2)
+If an email fails, the run still completes so nobody else is emailed twice, and the failed person's pages are kept on `ContentExpiry.Code.State` and retried every run for 14 days. This matters for 0.3: deletion must never rely on a warning that was only attempted. Pages with child pages, excluded pages and pages with nobody to email are skipped and counted in the run result.
 
-- A banner under the page title (`org.xwiki.platform.template.content.header.after`) on pages within their warning window, with a **Keep this page** button for anyone with edit rights.
-- Clicking saves the page as a minor edit with the comment "Kept by Content Expiry", resetting `doc.date` and leaving an audit trail in history.
+The job is a Groovy scheduler job whose script calls `runScheduled()`. The scheduler runs it as the job's `contextUser`, which the engine sets to the admin who last saved the settings. Checked on 17.10.14: an admin without programming rights works for that, because the job page keeps the author it was imported with. The engine still checks admin rights on every run.
+
+### Keep (0.2, built)
+
+- A banner under the page title (`org.xwiki.platform.template.content.header.after`) on pages within their warning window, with a **Keep this page** button for anyone with edit rights. Visitors without edit rights see the banner and a hint to sign in. Pages with child pages get no banner.
+- Clicking posts to the page with a CSRF token. The engine saves the page as a minor edit with the comment "Kept by Content Expiry", resetting `doc.date` and leaving an audit trail in history. XWiki ignores a save that changes nothing, so the engine marks the metadata dirty to force it. It sets the author to the person who clicked and does not touch the content author, so scripts on the page don't start running with that person's rights.
 - Emails link to the page, not to a "keep" URL: a link that changes data on GET is a CSRF risk and mail scanners pre-fetch links.
 
 ### Deletion (0.3)
@@ -79,11 +83,11 @@ Settings saved by a non-admin are ignored (defaults used, with a warning), as a 
 
 Go-live is meant to be: install, look at the report for a few weeks, adjust exclusions, then switch warnings on.
 
-## 4. Owner UI (0.2)
+## 4. Owner UI
 
-- The banner and Keep button.
-- An Owner field in the page's Information tab, using the in-place property editor (same approach as the classification feature).
-- A "My pages due for review" page listing pages the current user would be warned about.
+- The banner and Keep button (0.2, built).
+- An **Expiry** tab under the page (0.2, built) with an Owner field for people who can edit the page, showing when the page expires and, to editors only, who would be warned. The first design put the field in the Information tab, but that tab is built into the skin and can't be extended, so this is its own tab, registered on `org.xwiki.plaftorm.template.docextra` (the misspelling is XWiki's). The owner form posts to the page and is handled by the banner extension, because a tab's content is only rendered when the tab loads.
+- A "My pages due for review" page listing pages the current user would be warned about (0.4).
 
 ## 5. Architecture
 
@@ -99,26 +103,27 @@ Wiki pages only (XAR). The engine is one Groovy class on `ContentExpiry.Code.Eng
 |---|---|---|
 | `ContentExpiry.Code.ConfigClass` | Settings class | Yes |
 | `ContentExpiry.Code.Settings` | One ConfigClass object: the live settings | **No**, created on first save |
-| `ContentExpiry.Code.StateClass` | `active`, `policyDate`, `retentionMonths`, `maxWarningDays` | Yes |
+| `ContentExpiry.Code.StateClass` | `active`, `policyDate`, `retentionMonths`, `maxWarningDays`, `lastRun`, `lastResult`, `retry` | Yes |
 | `ContentExpiry.Code.State` | Engine bookkeeping | **No**, created by the engine |
 | `ContentExpiry.Code.Engine` | Groovy engine | Yes |
 | `ContentExpiry.Code.Admin` | ConfigurableClass objects, stylesheet | Yes |
 | `ContentExpiry.Code.AdminSettingsSheet`, `AdminReportSheet`, `Macros` | Velocity | Yes |
 | `ContentExpiry.Code.Translations` | Admin section names | Yes |
 | `ContentExpiry.WebPreferences` | Edit, delete and comment allowed to `XWiki.XWikiAdminGroup` only | Yes |
-| `ContentExpiry.Code.OwnerClass` | `owner` (user) | 0.2 |
-| `ContentExpiry.Code.Job` | Scheduler job | 0.2 |
-| `ContentExpiry.Code.MailTemplate` | `XWiki.Mail` object for the digest | 0.2 |
+| `ContentExpiry.Code.OwnerClass` | `owner` (user), added to a page by the Expiry tab | Yes |
+| `ContentExpiry.Code.Job` | Scheduler job | Yes |
+| `ContentExpiry.Code.MailTemplate` | `XWiki.Mail` object for the digest | Yes |
+| `ContentExpiry.Code.PageUI` | UI extensions (banner, Expiry tab) and their stylesheet | Yes |
 | `ContentExpiry.Log.<yyyy-mm>` | Audit log | 0.3 |
 
-Email will use the Mail Sender API (`$services.mail.sender`) with a template page holding an `XWiki.Mail` object. In-app notifications are a maybe: **(unverified)** whether a user-targeted notification type can be defined without Java.
+Email uses the Mail Sender API (`mail.sender` script service, loaded from the engine) with a template page holding an `XWiki.Mail` object. Checked on 17.10.14: `createMessage('template', ref, [velocityVariables: ...])` renders the template, but the `headers` parameter did not set recipients, so the engine sets From and To with javax.mail. The template page's variables are `recipientName`, `items` (title, reference, url, lastModifiedText, expiryText, daysLeft, threshold, contactSource), `count`, `mode`, `retentionMonths`, `wikiName`, `wikiUrl`. The wiki's `title` preference can't be used as a name: it is itself a Velocity template. In-app notifications are a maybe: **(unverified)** whether a user-targeted notification type can be defined without Java.
 
 ## 7. Roadmap
 
 | Version | Adds |
 |---|---|
-| 0.1 | Settings, report, safety floor (report only) |
-| 0.2 | Owner field, scheduler job, digest emails, banner and Keep button, Warn-only mode |
+| 0.1 | Settings, report, safety floor (report only). Built, tested |
+| 0.2 | Owner field, scheduler job, digest emails, banner and Keep button, Warn-only mode. Built, tested |
 | 0.3 | Deletion to recycle bin, audit log, children list for admins, Warn-and-delete mode |
 | 0.4 | "My pages" view, editable email template, acceptance tests on a live instance, first release |
 
@@ -131,6 +136,10 @@ Email will use the Mail Sender API (`$services.mail.sender`) with a template pag
 5. Does the Confluence migrator keep original modified dates? Decides the size of the first wave.
 6. Records-retention rules (public sector) that would require archiving instead of deletion.
 7. Who XWiki records as author of imported pages. Checked on 17.10.14: the importing user (superadmin in the test). Still to check with a normal admin account that has programming rights. Also found: documents saved from the engine get no author unless the engine sets it, so it now stamps the acting admin itself.
+8. Cost of the banner extension. It runs on every page view and exits early when warnings are off or the page isn't near expiry, but it has not been timed on a large wiki.
+9. Email language and the user's own locale. Emails are English only.
+10. Whether the real SMTP server at work needs authentication or TLS. The tests use a plain local capture server.
+11. XWiki's ConfigurableClass framework locks the section's registration page while an admin has it open, and a second admin sees "locked by". That is standard for every configurable section, not something this extension adds.
 
 ## Sources
 

@@ -1,0 +1,68 @@
+{{velocity}}
+## Content Expiry: runs under the title of every page view.
+## 1. Handles the Keep button and the owner form from the Expiry tab (both POST to the page).
+## 2. Shows the banner when the page is inside its warning window.
+#set ($ceEngine = $xwiki.parseGroovyFromPage('ContentExpiry.Code.Engine'))
+#if ("$!ceEngine.ping()" == 'ok')
+#set ($ceRef = $doc.documentReference)
+#set ($ceMessage = '')
+#set ($ceMessageClass = 'successmessage')
+#if ($request.method == 'POST' && ("$!request.ceAction" == 'keep' || "$!request.ceAction" == 'setOwner'))
+  #if (!$services.csrf.isTokenValid("$!request.form_token"))
+    #set ($ceMessage = 'Your session expired before the form was sent. Nothing was changed.')
+    #set ($ceMessageClass = 'errormessage')
+  #elseif ($request.ceAction == 'keep')
+    #set ($ceResult = $ceEngine.keep($ceRef))
+    #if ($ceResult.ok)
+      #set ($ceMessage = 'Kept. This page was saved without changes and its expiry clock has restarted.')
+    #else
+      #set ($ceMessage = $ceResult.error)
+      #set ($ceMessageClass = 'errormessage')
+    #end
+  #else
+    #set ($ceResult = $ceEngine.setOwner($ceRef, "$!request.ceOwner"))
+    #if ($ceResult.ok)
+      #set ($ceMessage = 'Owner saved.')
+    #else
+      #set ($ceMessage = $ceResult.error)
+      #set ($ceMessageClass = 'errormessage')
+    #end
+  #end
+#end
+#set ($ceBanner = $ceEngine.bannerFor($ceRef))
+#if ("$ceMessage" != '' || $ceBanner)
+#set ($discard = $xwiki.ssx.use('ContentExpiry.Code.PageUI'))
+{{html clean="false"}}
+#if ("$ceMessage" != '')
+<div class="box $ceMessageClass ce-message" role="status">$escapetool.xml($ceMessage)</div>
+#end
+#if ($ceBanner)
+<div class="ce-banner" role="alert">
+  <div class="ce-banner-text">
+    <strong>
+    #if ($ceBanner.daysLeft <= 0)
+      This page has reached its expiry date.
+    #elseif ($ceBanner.mode == 'delete')
+      This page is due to be deleted on $escapetool.xml($xwiki.formatDate($ceBanner.expiry, 'd MMMM yyyy')) (in $ceBanner.daysLeft days).
+    #else
+      This page reaches its expiry date on $escapetool.xml($xwiki.formatDate($ceBanner.expiry, 'd MMMM yyyy')) (in $ceBanner.daysLeft days).
+    #end
+    </strong>
+    Nobody has changed it since $escapetool.xml($xwiki.formatDate($ceBanner.lastModified, 'd MMMM yyyy')).
+    #if ($ceBanner.mode != 'delete')The wiki is set to warn only, so nothing is deleted yet.#end
+  </div>
+  #if ($ceBanner.canKeep)
+  <form class="ce-banner-form" method="post" action="$escapetool.xml($doc.getURL('view'))">
+    <input type="hidden" name="ceAction" value="keep" />
+    <input type="hidden" name="form_token" value="$escapetool.xml($services.csrf.token)" />
+    <button type="submit" class="btn btn-primary">Keep this page</button>
+  </form>
+  #else
+  <div class="ce-banner-hint">Sign in with edit rights to keep this page.</div>
+  #end
+</div>
+#end
+{{/html}}
+#end
+#end
+{{/velocity}}

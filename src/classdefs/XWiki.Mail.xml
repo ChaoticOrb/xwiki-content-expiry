@@ -1,0 +1,52 @@
+<class>
+  <name>XWiki.Mail</name>
+  <customClass />
+  <customMapping />
+  <defaultViewSheet />
+  <defaultEditSheet />
+  <defaultWeb />
+  <nameField />
+  <validationScript />
+  <html>
+    <contenttype>PureText</contenttype>
+    <disabled>0</disabled>
+    <editor>PureText</editor>
+    <name>html</name>
+    <number>4</number>
+    <prettyName>HTML</prettyName>
+    <rows>15</rows>
+    <size>80</size>
+    <unmodifiable>0</unmodifiable>
+    <classType>com.xpn.xwiki.objects.classes.TextAreaClass</classType>
+  </html>
+  <language>
+    <disabled>0</disabled>
+    <name>language</name>
+    <number>2</number>
+    <prettyName>Language</prettyName>
+    <size>5</size>
+    <unmodifiable>0</unmodifiable>
+    <classType>com.xpn.xwiki.objects.classes.StringClass</classType>
+  </language>
+  <subject>
+    <disabled>0</disabled>
+    <name>subject</name>
+    <number>1</number>
+    <prettyName>Subject</prettyName>
+    <size>40</size>
+    <unmodifiable>0</unmodifiable>
+    <classType>com.xpn.xwiki.objects.classes.StringClass</classType>
+  </subject>
+  <text>
+    <contenttype>PureText</contenttype>
+    <disabled>0</disabled>
+    <editor>PureText</editor>
+    <name>text</name>
+    <number>3</number>
+    <prettyName>Text</prettyName>
+    <rows>15</rows>
+    <size>80</size>
+    <unmodifiable>0</unmodifiable>
+    <classType>com.xpn.xwiki.objects.classes.TextAreaClass</classType>
+  </text>
+</class>

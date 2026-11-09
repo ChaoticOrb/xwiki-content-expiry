@@ -1,0 +1,21 @@
+.ce-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75em 1.5em;
+  margin: 0 0 1em;
+  padding: 0.75em 1em;
+  border: 1px solid #e0a800;
+  border-left-width: 6px;
+  border-radius: 3px;
+  background: #fff8e1;
+  color: #5c4400;
+}
+.ce-banner-form { margin: 0; }
+.ce-banner-hint { font-style: italic; }
+.ce-message { margin-bottom: 1em; }
+.ce-tab p { margin: 0 0 0.75em; }
+.ce-owner-form label { display: block; font-weight: bold; }
+.ce-owner-form .xHint { display: block; margin: 0.25em 0 0.5em; }
+.ce-owner-form input[type=text] { max-width: 24em; margin-right: 0.5em; }
