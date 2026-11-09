@@ -96,7 +96,7 @@ class ContentExpiryEngine
         return serializer.serialize(ref)
     }
 
-    private boolean isAdmin(DocumentReference userRef)
+    private boolean isAdminUser(DocumentReference userRef)
     {
         if (userRef == null) {
             return false
@@ -105,9 +105,20 @@ class ContentExpiryEngine
         return auth.hasAccess(Right.ADMIN, userRef, new WikiReference(xc().getWikiId()))
     }
 
+    /** Records the acting admin as author. XWiki does not do this for documents saved from a script. */
+    private void stamp(XWikiDocument doc)
+    {
+        DocumentReference user = xc().getUserReference()
+        doc.setAuthorReference(user)
+        doc.setContentAuthorReference(user)
+        if (doc.isNew()) {
+            doc.setCreatorReference(user)
+        }
+    }
+
     boolean isAdmin()
     {
-        return isAdmin(xc().getUserReference())
+        return isAdminUser(xc().getUserReference())
     }
 
     private void requireAdmin()
@@ -141,7 +152,7 @@ class ContentExpiryEngine
         Map s = [:]
         s.saved = obj != null
         // Settings saved by a non-admin (e.g. if someone loosened the space rights) are ignored.
-        s.trusted = obj == null || isAdmin(doc.getAuthorReference())
+        s.trusted = obj == null || isAdminUser(doc.getAuthorReference())
         if (!s.trusted) {
             obj = null
         }
@@ -249,6 +260,7 @@ class ContentExpiryEngine
         if (doc.isNew()) {
             doc.setTitle('Content Expiry settings')
         }
+        stamp(doc)
         xc.getWiki().saveDocument(doc, 'Settings updated', false, xc)
         return [ok: true]
     }
@@ -305,6 +317,7 @@ class ContentExpiryEngine
             if (doc.isNew()) {
                 doc.setTitle('Content Expiry state')
             }
+            stamp(doc)
             xc.getWiki().saveDocument(doc, reset ? 'Policy date reset' : 'Policy state updated', true, xc)
         }
         return s.active ? policyDate : null

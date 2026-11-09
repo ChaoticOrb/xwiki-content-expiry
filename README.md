@@ -9,7 +9,7 @@ Built entirely from wiki pages (Velocity, plus a Groovy engine). No Java to comp
 
 ## Requirements
 
-- Written for XWiki 17.10 LTS and 18.x. Older versions may work but haven't been checked. **Not yet tested on a live instance.**
+- Written for XWiki 17.10 LTS and 18.x. Older versions may work but haven't been checked. Smoke-tested on XWiki 17.10.14 (standalone Jetty and HSQLDB), installed by the superadmin account. Not yet tested on a production-style setup or with a normal admin account.
 - An admin account **with programming rights** to install it. The engine is Groovy, and XWiki only runs Groovy from pages saved by such a user.
 
 ## Install

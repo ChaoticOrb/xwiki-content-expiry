@@ -1,6 +1,6 @@
 # Content Expiry: design spec
 
-**Status:** v0.2 of the spec, 9 Nov 2026. Version 0.1 of the extension (report only) is built; nothing beyond that.
+**Status:** v0.2 of the spec, 9 Nov 2026. Version 0.1 of the extension (report only) is built and smoke-tested on XWiki 17.10.14; nothing beyond that.
 
 Pages that haven't been touched for a configurable period (default 5 years) are flagged, their owner is warned ahead of time, and if nobody keeps them they go to the XWiki recycle bin. Admins configure it from the normal Administration screen. Everyone else only sees warnings and a Keep button.
 
@@ -130,7 +130,7 @@ Email will use the Mail Sender API (`$services.mail.sender`) with a template pag
 4. SMTP at work and the sender address.
 5. Does the Confluence migrator keep original modified dates? Decides the size of the first wave.
 6. Records-retention rules (public sector) that would require archiving instead of deletion.
-7. **(unverified)** Who XWiki records as author of imported pages. Matters because the engine needs programming rights and the admin sections need an admin author.
+7. Who XWiki records as author of imported pages. Checked on 17.10.14: the importing user (superadmin in the test). Still to check with a normal admin account that has programming rights. Also found: documents saved from the engine get no author unless the engine sets it, so it now stamps the acting admin itself.
 
 ## Sources
 
