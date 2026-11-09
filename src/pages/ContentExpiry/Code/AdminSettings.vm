@@ -1,0 +1,165 @@
+{{include reference="ContentExpiry.Code.Macros"/}}
+
+{{velocity}}
+## Settings section of Administration > Content > Content expiry.
+## Included from the ConfigurableClass object on ContentExpiry.Code.Admin.
+#ceLoadEngine()
+#if ($ceEngine)
+#set ($discard = $xwiki.ssx.use('ContentExpiry.Code.Admin'))
+##
+## ---- Save -------------------------------------------------------------------------------
+#set ($ceSaved = false)
+#set ($ceErrors = {})
+#set ($ceSubmitted = $request.method == 'POST' && "$!request.ceAction" == 'saveSettings')
+#if ($ceSubmitted)
+  #if (!$services.csrf.isTokenValid("$!request.form_token"))
+    #set ($discard = $ceErrors.put('form', 'Your session expired before the form was sent. Nothing was saved; please try again.'))
+  #else
+    #set ($ceInput = {
+      'enabled': "$!request.ceEnabled",
+      'mode': "$!request.ceMode",
+      'retentionMonths': "$!request.ceRetentionMonths",
+      'warningDays': "$!request.ceWarningDays",
+      'includedSpaces': "$!request.ceIncludedSpaces",
+      'excludedSpaces': "$!request.ceExcludedSpaces",
+      'exemptPages': "$!request.ceExemptPages",
+      'fallbackContact': "$!request.ceFallbackContact"
+    })
+    #set ($ceResult = $ceEngine.saveSettings($ceInput))
+    #if ($ceResult.ok)
+      #set ($ceSaved = true)
+    #else
+      #set ($ceErrors = $ceResult.errors)
+    #end
+  #end
+#end
+##
+## ---- Values to show: what was just submitted if it failed, otherwise what's saved -------
+#set ($s = $ceEngine.settings)
+#if ($ceSubmitted && !$ceSaved)
+  #set ($ceEnabledSubmitted = "$!request.ceEnabled" != '')
+  #set ($v = {
+    'enabled': $ceEnabledSubmitted,
+    'mode': "$!request.ceMode",
+    'retentionMonths': "$!request.ceRetentionMonths",
+    'warningDays': "$!request.ceWarningDays",
+    'includedSpaces': "$!request.ceIncludedSpaces",
+    'excludedSpaces': "$!request.ceExcludedSpaces",
+    'exemptPages': "$!request.ceExemptPages",
+    'fallbackContact': "$!request.ceFallbackContact"
+  })
+#else
+  #set ($v = {
+    'enabled': $s.enabled,
+    'mode': $s.mode,
+    'retentionMonths': "$s.retentionMonths",
+    'warningDays': $s.warningDaysText,
+    'includedSpaces': $s.includedSpacesText,
+    'excludedSpaces': $s.excludedSpacesText,
+    'exemptPages': $s.exemptPagesText,
+    'fallbackContact': $s.fallbackContact
+  })
+#end
+##
+#if ($ceSaved)
+{{success}}Settings saved.{{/success}}
+
+#elseif ($ceErrors.form)
+{{error}}$services.rendering.escape($ceErrors.form, 'xwiki/2.1'){{/error}}
+
+#elseif (!$ceErrors.isEmpty())
+{{error}}Nothing was saved. Check the fields marked below.{{/error}}
+
+#end
+#if (!$s.trusted)
+{{warning}}The saved settings were last changed by someone without administration rights, so they are being ignored and the defaults are in use. Check who can edit the ContentExpiry space, then save the settings again.{{/warning}}
+
+#end
+{{html clean="false"}}
+<div class="content-expiry">
+  <p class="ce-intro">Pages that nobody has changed for the retention period are listed in the
+    <a href="$escapetool.xml($doc.getURL('admin', 'editor=globaladmin&section=contentExpiryReport'))">Content expiry report</a>.
+    In later versions, page owners will be warned before the expiry date and can keep a page with one click.</p>
+  <div class="ce-status">
+    #if ($s.enabled)
+      <span class="ce-badge ce-badge-on">On</span>
+    #else
+      <span class="ce-badge ce-badge-off">Off</span>
+    #end
+    <span>Mode: <strong>#ceModeLabel($s.mode)</strong>.
+    #if ($s.saved)
+      Last saved by $escapetool.xml($s.lastSavedBy) on $escapetool.xml($xwiki.formatDate($s.lastSavedOn, 'd MMMM yyyy HH:mm')).
+    #else
+      Not saved yet, so the defaults below are in use.
+    #end
+    </span>
+  </div>
+  <form class="xform ce-settings" method="post" action="$escapetool.xml($doc.getURL('admin', 'editor=globaladmin&section=contentExpiry'))">
+    <input type="hidden" name="ceAction" value="saveSettings" />
+    <input type="hidden" name="form_token" value="$escapetool.xml($services.csrf.token)" />
+    <dl>
+      <dt>
+        <label><input type="checkbox" name="ceEnabled" value="1"#if ($v.enabled) checked="checked"#end /> Turn on content expiry</label>
+        <span class="xHint">When off, nothing happens and the report still works, so you can try settings safely.</span>
+      </dt>
+      <dd></dd>
+
+      <dt>
+        <label>Mode</label>
+        <span class="xHint">Start with Report only and check the report before going further.</span>
+        #ceFieldError('mode')
+      </dt>
+      <dd>
+        <label class="ce-radio"><input type="radio" name="ceMode" value="report"#if ($v.mode == 'report' || "$!v.mode" == '') checked="checked"#end /> Report only: list pages, send no emails, delete nothing</label>
+        <label class="ce-radio ce-disabled"><input type="radio" name="ceMode" value="warn" disabled="disabled" /> Warn only: email page owners, delete nothing <em>(coming in a later version)</em></label>
+        <label class="ce-radio ce-disabled"><input type="radio" name="ceMode" value="delete" disabled="disabled" /> Warn and delete: email owners, then move expired pages to the recycle bin <em>(coming in a later version)</em></label>
+      </dd>
+
+      <dt>
+        <label for="ceRetentionMonths">Retention period (months)</label>
+        <span class="xHint">How long a page can go without any change before it expires. 60 months is 5 years. Any edit restarts the clock.</span>
+        #ceFieldError('retentionMonths')
+      </dt>
+      <dd><input type="number" min="1" max="1200" id="ceRetentionMonths" name="ceRetentionMonths" value="$escapetool.xml($v.retentionMonths)" /></dd>
+
+      <dt>
+        <label for="ceWarningDays">Warnings (days before expiry)</label>
+        <span class="xHint">When owners get an email, separated by commas. Nothing can expire until the longest warning has passed after warnings are switched on, so every owner gets every warning.</span>
+        #ceFieldError('warningDays')
+      </dt>
+      <dd><input type="text" id="ceWarningDays" name="ceWarningDays" value="$escapetool.xml($v.warningDays)" /></dd>
+
+      <dt>
+        <label for="ceIncludedSpaces">Only these spaces</label>
+        <span class="xHint">One space per line, for example <tt>News</tt> or <tt>Teams.Finance</tt>. Child spaces are included. Leave empty to cover the whole wiki.</span>
+        #ceFieldError('spaces')
+      </dt>
+      <dd><textarea id="ceIncludedSpaces" name="ceIncludedSpaces" rows="3">$escapetool.xml($v.includedSpaces)</textarea></dd>
+
+      <dt>
+        <label for="ceExcludedSpaces">Never these spaces</label>
+        <span class="xHint">One space per line. Child spaces are excluded too. System spaces, hidden pages, user profiles and application code are always excluded.</span>
+      </dt>
+      <dd><textarea id="ceExcludedSpaces" name="ceExcludedSpaces" rows="3">$escapetool.xml($v.excludedSpaces)</textarea></dd>
+
+      <dt>
+        <label for="ceExemptPages">Exempt pages</label>
+        <span class="xHint">One page reference per line, for example <tt>Policies.Code of conduct.WebHome</tt>. These never expire. The wiki home page is always exempt.</span>
+        #ceFieldError('exemptPages')
+      </dt>
+      <dd><textarea id="ceExemptPages" name="ceExemptPages" rows="3">$escapetool.xml($v.exemptPages)</textarea></dd>
+
+      <dt>
+        <label for="ceFallbackContact">Fallback contact</label>
+        <span class="xHint">Who is told about pages whose owner, creator and last editor can't be emailed: a user, a group or an email address.</span>
+        #ceFieldError('fallbackContact')
+      </dt>
+      <dd><input type="text" id="ceFallbackContact" name="ceFallbackContact" value="$escapetool.xml($v.fallbackContact)" /></dd>
+    </dl>
+    <p><input type="submit" class="button" value="Save" /></p>
+  </form>
+  <p class="ce-version">Content Expiry $escapetool.xml($ceEngine.version)</p>
+</div>
+{{/html}}
+#end
+{{/velocity}}

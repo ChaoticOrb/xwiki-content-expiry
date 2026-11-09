@@ -1,0 +1,37 @@
+{{velocity output="false"}}
+## Shared Velocity macros for the Content Expiry admin sections.
+
+## Sets $ceEngine to the engine, or to false after printing why it can't be used.
+#macro (ceLoadEngine)
+  #set ($ceEngine = false)
+  #set ($ceCandidate = $xwiki.parseGroovyFromPage('ContentExpiry.Code.Engine'))
+  #if ("$!ceCandidate.ping()" != 'ok')
+    #set ($ceEngineDoc = $xwiki.getDocument('ContentExpiry.Code.Engine'))
+
+{{error}}Content Expiry can't start. Its engine page, [[ContentExpiry.Code.Engine]], must be saved by a user with programming rights, and was last saved by $services.rendering.escape("$!ceEngineDoc.author", 'xwiki/2.1'). Log in as a user with programming rights, open that page, click Edit, and save it without changes.{{/error}}
+
+  #elseif (!$ceCandidate.isAdmin())
+
+{{error}}Only wiki administrators can use this page.{{/error}}
+
+  #else
+    #set ($ceEngine = $ceCandidate)
+  #end
+#end
+
+#macro (ceModeLabel $mode)
+#if ($mode == 'warn')Warn only#elseif ($mode == 'delete')Warn and delete#{else}Report only#end
+#end
+
+#macro (ceFieldError $field)
+#if ($ceErrors && $ceErrors.get($field))<span class="ce-error">$escapetool.xml($ceErrors.get($field))</span>#end
+#end
+
+#macro (ceStatusLabel $status)
+#if ($status == 'expired')Expired#elseif ($status == 'due')Due soon#elseif ($status == 'warning')Warning period#elseif ($status == 'excluded')Excluded#{else}OK#end
+#end
+
+#macro (ceDate $date)
+#if ($date)$escapetool.xml($xwiki.formatDate($date, 'd MMM yyyy'))#end
+#end
+{{/velocity}}

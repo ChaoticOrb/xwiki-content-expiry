@@ -1,0 +1,7 @@
+<?xml version="1.1" encoding="UTF-8"?>
+<!-- Groovy class loaded with parseGroovyFromPage. Must be saved by a user with programming rights. -->
+<xwikidoc reference="ContentExpiry.Code.Engine">
+  <title>Content Expiry engine</title>
+  <syntaxId>plain/1.0</syntaxId>
+  <content file="Engine.groovy"/>
+</xwikidoc>

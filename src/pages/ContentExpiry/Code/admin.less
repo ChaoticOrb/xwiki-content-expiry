@@ -1,0 +1,134 @@
+/* Content Expiry admin sections. LESS so it picks up the wiki's colour theme. */
+
+.content-expiry {
+  .ce-intro, .ce-note {
+    max-width: 50em;
+  }
+
+  .ce-status {
+    display: flex;
+    align-items: center;
+    gap: .75em;
+    margin: 1em 0;
+    padding: .75em 1em;
+    border: 1px solid @panel-default-border;
+    border-radius: @border-radius-base;
+    background: @panel-bg;
+  }
+
+  .ce-badge {
+    display: inline-block;
+    padding: .15em .6em;
+    border-radius: 1em;
+    font-weight: bold;
+    font-size: .9em;
+  }
+  .ce-badge-on { background: @state-success-bg; color: @state-success-text; }
+  .ce-badge-off { background: @state-warning-bg; color: @state-warning-text; }
+
+  .ce-settings {
+    dd textarea, dd input[type="text"] {
+      max-width: 40em;
+    }
+    dd input[type="number"] {
+      width: 8em;
+    }
+    .ce-radio {
+      display: block;
+      font-weight: normal;
+      margin-bottom: .35em;
+    }
+    .ce-disabled {
+      color: @text-muted;
+    }
+  }
+
+  .ce-error {
+    display: block;
+    color: @state-danger-text;
+    font-weight: bold;
+  }
+
+  .ce-cards {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1em;
+    list-style: none;
+    margin: 1em 0 .25em;
+    padding: 0;
+
+    li {
+      flex: 0 1 12em;
+      padding: .75em 1em;
+      border: 1px solid @panel-default-border;
+      border-radius: @border-radius-base;
+    }
+  }
+  .ce-card-number {
+    display: block;
+    font-size: 1.8em;
+    font-weight: bold;
+    line-height: 1.2;
+  }
+  .ce-card-label, .ce-hint, .ce-ref, .ce-version, .ce-count {
+    color: @text-muted;
+    font-size: .9em;
+  }
+
+  .ce-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5em;
+    list-style: none;
+    margin: 1.5em 0 1em;
+    padding: 0;
+
+    a {
+      display: inline-block;
+      padding: .35em .9em;
+      border: 1px solid @panel-default-border;
+      border-radius: 1.2em;
+      text-decoration: none;
+    }
+    .active a {
+      background: @brand-primary;
+      border-color: @brand-primary;
+      color: #fff;
+    }
+  }
+
+  .ce-table {
+    width: 100%;
+
+    td, th {
+      vertical-align: top;
+      padding: .5em .6em;
+    }
+    .ce-ref, .ce-row-note {
+      display: block;
+    }
+    .ce-row-note {
+      font-size: .9em;
+      color: @state-warning-text;
+    }
+  }
+
+  .ce-status-label {
+    display: inline-block;
+    padding: .1em .5em;
+    border-radius: @border-radius-base;
+    font-size: .9em;
+    white-space: nowrap;
+  }
+  .ce-status-expired { background: @state-danger-bg; color: @state-danger-text; }
+  .ce-status-due { background: @state-warning-bg; color: @state-warning-text; }
+  .ce-status-warning { background: @state-info-bg; color: @state-info-text; }
+  .ce-status-excluded { color: @text-muted; }
+
+  .ce-pager {
+    display: flex;
+    gap: 1em;
+    align-items: center;
+    margin-top: 1em;
+  }
+}

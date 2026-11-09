@@ -1,0 +1,16 @@
+<?xml version="1.1" encoding="UTF-8"?>
+<!-- Names of the admin sections in the Administration menu. -->
+<xwikidoc reference="ContentExpiry.Code.Translations">
+  <title>Content Expiry translations</title>
+  <defaultLanguage>en</defaultLanguage>
+  <syntaxId>plain/1.0</syntaxId>
+  <content>admin.contentexpiry=Content expiry
+admin.contentexpiry.description=Delete pages nobody has changed for a set time, after warning their owners.
+admin.contentexpiryreport=Content expiry report
+admin.contentexpiryreport.description=Pages that are past, or close to, their expiry date.
+</content>
+  <object>
+    <className>XWiki.TranslationDocumentClass</className>
+    <property><scope>WIKI</scope></property>
+  </object>
+</xwikidoc>

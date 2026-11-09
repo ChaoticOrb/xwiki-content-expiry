@@ -1,0 +1,112 @@
+{{include reference="ContentExpiry.Code.Macros"/}}
+
+{{velocity}}
+## Report section of Administration > Content > Content expiry report.
+## Included from the ConfigurableClass object on ContentExpiry.Code.Admin.
+#ceLoadEngine()
+#if ($ceEngine)
+#set ($discard = $xwiki.ssx.use('ContentExpiry.Code.Admin'))
+#set ($cePageSize = 50)
+#set ($ceFilter = "$!request.ceFilter")
+#if (!['due', 'stale', 'all'].contains($ceFilter))
+  #set ($ceFilter = 'due')
+#end
+#set ($cePage = 1)
+#set ($ceRequestedPage = $mathtool.toInteger("$!request.cePage"))
+#if ($ceRequestedPage && $ceRequestedPage > 1)
+  #set ($cePage = $ceRequestedPage)
+#end
+#set ($ceSummary = $ceEngine.summary())
+#set ($ceReport = $ceEngine.report($ceFilter, $mathtool.mul($mathtool.sub($cePage, 1), $cePageSize), $cePageSize))
+#set ($s = $ceSummary.settings)
+#set ($ceMaxWarning = $s.warningDays.get(0))
+#set ($ceLastPage = $mathtool.max(1, $mathtool.toInteger($mathtool.ceil($mathtool.div($ceReport.total, $cePageSize)))))
+##
+#macro (ceReportUrl $filter $page)$escapetool.xml($doc.getURL('admin', "editor=globaladmin&section=contentExpiryReport&ceFilter=${filter}&cePage=${page}"))#end
+##
+{{html clean="false"}}
+<div class="content-expiry">
+  <div class="ce-status">
+    #if ($s.enabled)<span class="ce-badge ce-badge-on">On</span>#else<span class="ce-badge ce-badge-off">Off</span>#end
+    <span>Mode: <strong>#ceModeLabel($s.mode)</strong>. Retention: $s.retentionMonths months. Warnings: $escapetool.xml($s.warningDaysText) days before expiry.
+      <a href="$escapetool.xml($doc.getURL('admin', 'editor=globaladmin&section=contentExpiry'))">Change settings</a></span>
+  </div>
+  #if ($ceSummary.policyDate)
+    <p class="ce-note">Warnings started on #ceDate($ceSummary.policyDate), so nothing expires before #ceDate($ceSummary.floorDate).</p>
+  #else
+    <p class="ce-note">No warnings have been sent, so if warnings were switched on today the earliest anything could expire is #ceDate($ceSummary.floorDate), after the full $ceMaxWarning-day warning. The dates below assume that.</p>
+  #end
+
+  <ul class="ce-cards">
+    <li><span class="ce-card-number">$ceSummary.covered</span><span class="ce-card-label">pages covered</span></li>
+    <li><span class="ce-card-number">$ceSummary.stale</span><span class="ce-card-label">unchanged for $s.retentionMonths months or more</span></li>
+    #foreach ($bucket in $ceSummary.buckets)
+      <li><span class="ce-card-number">$bucket.count</span><span class="ce-card-label">would expire within $bucket.days days</span></li>
+    #end
+  </ul>
+  <p class="ce-hint">Counts come straight from the database. The per-page checks in the table (extension pages, class definitions) can exclude a few more.</p>
+
+  <ul class="ce-filters">
+    <li#if ($ceFilter == 'due') class="active"#end><a href="#ceReportUrl('due', 1)">Expiring within $ceMaxWarning days</a></li>
+    <li#if ($ceFilter == 'stale') class="active"#end><a href="#ceReportUrl('stale', 1)">Past the retention period</a></li>
+    <li#if ($ceFilter == 'all') class="active"#end><a href="#ceReportUrl('all', 1)">All covered pages</a></li>
+  </ul>
+
+  #if ($ceReport.total == 0)
+    <p class="ce-empty">
+    #if ($ceFilter == 'due')
+      Nothing would expire within $ceMaxWarning days.
+    #elseif ($ceFilter == 'stale')
+      No covered page has gone $s.retentionMonths months without a change.
+    #else
+      No pages are covered by the current settings.
+    #end
+    </p>
+  #else
+    <p class="ce-count">$ceReport.total pages, oldest change first. Showing $mathtool.add($ceReport.offset, 1) to $mathtool.add($ceReport.offset, $ceReport.rows.size()).</p>
+    <table class="ce-table">
+      <thead>
+        <tr>
+          <th scope="col">Page</th>
+          <th scope="col">Last changed</th>
+          <th scope="col">Retention reached</th>
+          <th scope="col">Would expire</th>
+          <th scope="col">Status</th>
+          <th scope="col">Would warn</th>
+        </tr>
+      </thead>
+      <tbody>
+      #foreach ($row in $ceReport.rows)
+        <tr class="ce-row-$escapetool.xml($row.status)">
+          <td>
+            <a href="$escapetool.xml($row.url)">$escapetool.xml($row.title)</a>
+            <span class="ce-ref">$escapetool.xml($row.fullName)</span>
+            #if ("$!row.note" != '')<span class="ce-row-note">$escapetool.xml($row.note)</span>#end
+          </td>
+          <td>#ceDate($row.lastModified)<span class="ce-ref">$escapetool.xml($row.lastEditor)</span></td>
+          <td>#ceDate($row.retentionReached)</td>
+          <td>#if ($row.status != 'excluded')#ceDate($row.expiry)#if ($row.daysLeft > 0)<span class="ce-ref">in $row.daysLeft days</span>#end#{else}Never#end</td>
+          <td><span class="ce-status-label ce-status-$escapetool.xml($row.status)">#ceStatusLabel($row.status)</span>#if ($row.hasChildren)<span class="ce-ref">Has child pages</span>#end</td>
+          <td>
+            #if ($row.status != 'excluded')
+              $escapetool.xml($row.contact)
+              <span class="ce-ref">#if ($row.contactSource == 'fallback')fallback contact#{else}$escapetool.xml($row.contactSource)#end</span>
+              #if ("$!row.contactProblem" != '')<span class="ce-row-note">$escapetool.xml($row.contactProblem)</span>#end
+            #end
+          </td>
+        </tr>
+      #end
+      </tbody>
+    </table>
+    #if ($ceLastPage > 1)
+      <nav class="ce-pager" aria-label="Report pages">
+        #if ($cePage > 1)<a href="#ceReportUrl($ceFilter, $mathtool.sub($cePage, 1))">Previous</a>#end
+        <span>Page $cePage of $ceLastPage</span>
+        #if ($cePage < $ceLastPage)<a href="#ceReportUrl($ceFilter, $mathtool.add($cePage, 1))">Next</a>#end
+      </nav>
+    #end
+  #end
+</div>
+{{/html}}
+#end
+{{/velocity}}

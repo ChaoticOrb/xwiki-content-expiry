@@ -1,0 +1,58 @@
+<?xml version="1.1" encoding="UTF-8"?>
+<!-- Engine bookkeeping, stored on ContentExpiry.Code.State (created by the engine, never shipped). -->
+<xwikidoc reference="ContentExpiry.Code.StateClass">
+  <title>Content Expiry state class</title>
+  <class>
+    <name>ContentExpiry.Code.StateClass</name>
+    <customClass/>
+    <customMapping/>
+    <defaultViewSheet/>
+    <defaultEditSheet/>
+    <defaultWeb/>
+    <nameField/>
+    <validationScript/>
+    <active>
+      <defaultValue>0</defaultValue>
+      <disabled>0</disabled>
+      <displayFormType>checkbox</displayFormType>
+      <displayType>yesno</displayType>
+      <name>active</name>
+      <number>1</number>
+      <prettyName>Warnings active</prettyName>
+      <unmodifiable>0</unmodifiable>
+      <classType>com.xpn.xwiki.objects.classes.BooleanClass</classType>
+    </active>
+    <policyDate>
+      <dateFormat>yyyy-MM-dd HH:mm:ss</dateFormat>
+      <disabled>0</disabled>
+      <emptyIsToday>0</emptyIsToday>
+      <name>policyDate</name>
+      <number>2</number>
+      <picker>0</picker>
+      <prettyName>Policy date</prettyName>
+      <size>20</size>
+      <unmodifiable>0</unmodifiable>
+      <classType>com.xpn.xwiki.objects.classes.DateClass</classType>
+    </policyDate>
+    <retentionMonths>
+      <disabled>0</disabled>
+      <name>retentionMonths</name>
+      <number>3</number>
+      <numberType>integer</numberType>
+      <prettyName>Retention months when last checked</prettyName>
+      <size>6</size>
+      <unmodifiable>0</unmodifiable>
+      <classType>com.xpn.xwiki.objects.classes.NumberClass</classType>
+    </retentionMonths>
+    <maxWarningDays>
+      <disabled>0</disabled>
+      <name>maxWarningDays</name>
+      <number>4</number>
+      <numberType>integer</numberType>
+      <prettyName>Longest warning when last checked</prettyName>
+      <size>6</size>
+      <unmodifiable>0</unmodifiable>
+      <classType>com.xpn.xwiki.objects.classes.NumberClass</classType>
+    </maxWarningDays>
+  </class>
+</xwikidoc>
