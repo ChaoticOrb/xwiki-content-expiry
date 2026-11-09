@@ -1,0 +1,30 @@
+<?xml version="1.1" encoding="UTF-8"?>
+<!-- Registers the two admin sections (Administration > Content) and their stylesheet. -->
+<xwikidoc reference="ContentExpiry.Code.Admin">
+  <title>Content Expiry administration</title>
+  <object>
+    <className>XWiki.ConfigurableClass</className>
+    <property><codeToExecute>{{include reference="ContentExpiry.Code.AdminSettingsSheet"/}}</codeToExecute></property>
+    <property><displayInCategory>content</displayInCategory></property>
+    <property><displayInSection>contentExpiry</displayInSection></property>
+    <property><scope>WIKI</scope></property>
+    <property><sectionOrder>800</sectionOrder></property>
+  </object>
+  <object>
+    <className>XWiki.ConfigurableClass</className>
+    <property><codeToExecute>{{include reference="ContentExpiry.Code.AdminReportSheet"/}}</codeToExecute></property>
+    <property><displayInCategory>content</displayInCategory></property>
+    <property><displayInSection>contentExpiryReport</displayInSection></property>
+    <property><scope>WIKI</scope></property>
+    <property><sectionOrder>810</sectionOrder></property>
+  </object>
+  <object>
+    <className>XWiki.StyleSheetExtension</className>
+    <property><cache>long</cache></property>
+    <property><code file="admin.less"/></property>
+    <property><contentType>LESS</contentType></property>
+    <property><name>Content Expiry admin</name></property>
+    <property><parse>0</parse></property>
+    <property><use>onDemand</use></property>
+  </object>
+</xwikidoc>

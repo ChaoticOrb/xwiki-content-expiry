@@ -1,0 +1,15 @@
+<?xml version="1.1" encoding="UTF-8"?>
+<xwikidoc reference="ContentExpiry.WebHome">
+  <title>Content Expiry</title>
+  <parent/>
+  <content>{{velocity}}
+Content Expiry lists, and in later versions deletes, pages that nobody has changed for a set time, after warning their owners.
+
+#if ($hasAdmin)
+* [[Settings>>path:$xwiki.getURL('XWiki.XWikiPreferences', 'admin', 'editor=globaladmin&amp;section=contentExpiry')]]
+* [[Report>>path:$xwiki.getURL('XWiki.XWikiPreferences', 'admin', 'editor=globaladmin&amp;section=contentExpiryReport')]]
+#else
+Wiki administrators configure it under Administration, Content.
+#end
+{{/velocity}}</content>
+</xwikidoc>
