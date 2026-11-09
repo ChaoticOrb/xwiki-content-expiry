@@ -8,7 +8,8 @@
 #set ($discard = $xwiki.ssx.use('ContentExpiry.Code.Admin'))
 #set ($cePageSize = 50)
 #set ($ceFilter = "$!request.ceFilter")
-#if (!['due', 'stale', 'all'].contains($ceFilter))
+#set ($ceFilters = ['due', 'stale', 'all'])
+#if (!$ceFilters.contains($ceFilter))
   #set ($ceFilter = 'due')
 #end
 #set ($cePage = 1)
@@ -34,7 +35,7 @@
   #if ($ceSummary.policyDate)
     <p class="ce-note">Warnings started on #ceDate($ceSummary.policyDate), so nothing expires before #ceDate($ceSummary.floorDate).</p>
   #else
-    <p class="ce-note">No warnings have been sent, so if warnings were switched on today the earliest anything could expire is #ceDate($ceSummary.floorDate), after the full $ceMaxWarning-day warning. The dates below assume that.</p>
+    <p class="ce-note">No warnings have been sent, so if warnings were switched on today the earliest anything could expire is #ceDate($ceSummary.floorDate), after the full ${ceMaxWarning}-day warning. The dates below assume that.</p>
   #end
 
   <ul class="ce-cards">
