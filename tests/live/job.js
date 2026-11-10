@@ -14,6 +14,22 @@ const JOE = { user: 'joe', pass: 'joepass1' };
   for (const pg of ['Settings', 'State']) await L.rest('DELETE', `wikis/xwiki/spaces/ContentExpiry/spaces/Code/pages/${pg}`);
   M.failMode(false); M.clear();
 
+  // The scheduler captures the run-as user when it schedules a job, and an import schedules with the placeholder
+  // user. Reproduce that: the scheduler holds a user who is not an admin while the page already names joe.
+  // Saving the settings must put that right. (On a wiki with a real XWiki.Admin user the placeholder passes by luck,
+  // which is why this uses a user who does not exist.)
+  const jobUser = (user, reload) => L.groovy(`
+def ref = new org.xwiki.model.reference.DocumentReference("xwiki", ["ContentExpiry", "Code"], "Job")
+def cls = new org.xwiki.model.reference.DocumentReference("xwiki", ["XWiki"], "SchedulerJobClass")
+def doc = x.getDocument(ref, ctx).clone()
+doc.getXObject(cls).setStringValue('contextUser', '${user}')
+x.saveDocument(doc, 'test setup', true, ctx)
+${reload ? "x.getPlugin('scheduler', ctx).reloadJob(x.getDocument(ref, ctx).getXObject(cls), ctx)" : ''}
+k('user', x.getDocument(ref, ctx).getXObject(cls).getStringValue('contextUser'))`, 'JobUser');
+  await jobUser('XWiki.ghost', true);
+  const stale = await jobUser('XWiki.joe', false);
+  L.check(stale.user === 'XWiki.joe', 'test setup: page names joe, scheduler still holds a user who is not an admin', stale.user || stale.error);
+
   // joe saves the settings. Superadmin sessions from earlier tests may still hold XWiki's admin page lock.
   await L.releaseAdminLock();
   const j = await L.open(JOE, { width: 1280, height: 1900 });
@@ -55,9 +71,20 @@ k('lastRun', s.lastRun); k('result', s.lastResult); k('jobUser', s.jobUser)`, 'J
   await p.goto(L.adminUrl('contentExpiryReport'), { waitUntil: 'load' });
   await L.takeOverAdminLock(p);
   const rep = await p.innerText('body');
-  L.check(/The daily job last finished on .* as XWiki\.joe\. Warned about 5 page/.test(rep.replace(/\s+/g, ' ')), 'the report page shows the last run and its result');
+  L.check(/The daily job last finished on [^.]*\. Warned about 5 page/.test(rep.replace(/\s+/g, ' ')), 'the report page shows the last run and its result');
   await p.screenshot({ path: path.join(L.OUT, 'report_after_run.png'), fullPage: true });
   await browser.close();
+
+  // If the job page names someone who is not an admin, the report says so before a run fails.
+  await jobUser('XWiki.ghost', false);
+  await L.releaseAdminLock();
+  const warnPage = await L.open();
+  await warnPage.page.goto(L.adminUrl('contentExpiryReport'), { waitUntil: 'load' });
+  await L.takeOverAdminLock(warnPage.page);
+  const warnText = (await warnPage.page.innerText('body')).replace(/\s+/g, ' ');
+  L.check(/set to run as XWiki\.ghost, who is not a wiki administrator/.test(warnText), 'the report warns when the job would run as a non-admin');
+  await warnPage.browser.close();
+  await jobUser('XWiki.joe', true);
 
   // A second trigger finds nothing new.
   const before = M.inbox().length;

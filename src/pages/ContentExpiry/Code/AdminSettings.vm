@@ -170,6 +170,9 @@
     </dl>
     <p><input type="submit" class="button" value="Save" /></p>
   </form>
+  #if ($s.active && !$ceEngine.jobUserAdmin)
+    <div class="box warningmessage">The daily job is set to run as <strong>$escapetool.xml($ceEngine.jobUser)</strong>, who is not a wiki administrator, so it cannot send warnings. Saving these settings runs it as you.</div>
+  #end
   #if ($s.active && "$!ceEngine.jobUser" != '')
     <p class="ce-hint">The daily job runs at 03:17 as $escapetool.xml($ceEngine.jobUser), the admin who last saved these settings. Check it under Administration, Scheduler if warnings stop.</p>
   #end

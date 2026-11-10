@@ -6,6 +6,9 @@ const F = require('./fixtures');
 const M = require('./mail');
 
 const ALICE = { user: 'alice', pass: 'alicepass1' };
+// Pages that are already old expire at the safety floor: the day warnings started plus the longest warning (60 days).
+const FLOOR = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
+  .format(new Date(Date.now() + 60 * 86400000));
 const view = (space) => `${L.BASE}/bin/view/Warn/${space}/`;
 const bannerOf = (page) => page.$$eval('.ce-banner', e => e.map(x => x.innerText.replace(/\s+/g, ' ').trim()).join(' || '));
 const info = (ref) => L.groovy(`
@@ -49,7 +52,7 @@ k('r', e.runAt(new Date()).message)`, 'Setup');
   // Banner on a page inside its warning window.
   await p.goto(view('BobOld'), { waitUntil: 'load' });
   let banner = await bannerOf(p);
-  L.check(/reaches its expiry date on 8 January 2027 \(in 60 days\)/.test(banner) && /Keep this page/.test(banner), 'a page in its warning window shows the banner and Keep button', banner);
+  L.check(banner.includes(`reaches its expiry date on ${FLOOR} (in 60 days)`) && /Keep this page/.test(banner), 'a page in its warning window shows the banner and Keep button', banner);
   L.check(/warn only, so nothing is deleted yet/.test(banner), 'the banner says nothing is deleted in warn mode');
   await p.screenshot({ path: path.join(L.OUT, 'ui_banner.png') });
 
@@ -90,7 +93,7 @@ k('r', e.runAt(new Date()).message)`, 'Setup');
   await p.click('#docExtrasTabsUl >> text=Expiry');
   await p.waitForSelector('.ce-tab');
   let tab = await p.innerText('.ce-tab');
-  L.check(/expires on .*8 January 2027/.test(tab) && /Warnings for this page go to/.test(tab) && /fallback contact/.test(tab), 'the Expiry tab shows when the page expires and who is warned', tab.replace(/\s+/g, ' ').slice(0, 200));
+  L.check(tab.includes(FLOOR) && /Warnings for this page go to/.test(tab) && /fallback contact/.test(tab), 'the Expiry tab shows when the page expires and who is warned', tab.replace(/\s+/g, ' ').slice(0, 200));
   await p.screenshot({ path: path.join(L.OUT, 'ui_tab.png'), fullPage: true });
 
   await p.fill('#ceOwner', 'nobody');

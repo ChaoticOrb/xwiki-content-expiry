@@ -12,6 +12,7 @@ Warn only. Page owners are emailed before the expiry date and can keep a page wi
 - Expiry tab under each page: when it expires, who is warned (editors only) and an owner field.
 - The report shows when the job last ran and what it did.
 - Live test suite (`tests/live`) with a mail capture server, and unit tests for the warning thresholds.
+- The daily job is reloaded in the scheduler on every settings save. The scheduler captures the run-as user when it schedules a job, so changing the job page alone did nothing, and the placeholder user from the import stayed in force. The first live install found this: the job failed with "needs wiki administration rights" while the page named the right admin. A failed run now says who it ran as, the report shows the reason and warns when the job's user isn't an admin.
 - The settings form posts with `forceEdit=1` so a second admin isn't refused because another admin has the section open. The form saves to its own page, so the lock protected nothing.
 
 ## 0.1.0 (unreleased)

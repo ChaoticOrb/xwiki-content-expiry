@@ -39,11 +39,16 @@
   #end
 
   #if ($s.active)
+    #if (!$ceSummary.jobUserAdmin)
+      <div class="box warningmessage">The daily job is set to run as <strong>$escapetool.xml($ceSummary.jobUser)</strong>, who is not a wiki administrator, so it cannot send warnings.
+        Open <a href="$escapetool.xml($doc.getURL('admin', 'editor=globaladmin&section=contentExpiry'))">Content expiry settings</a> and click Save to run it as you.</div>
+    #end
     <p class="ce-note">
       #if ($ceSummary.lastRun)
-        The daily job last finished on $escapetool.xml($xwiki.formatDate($ceSummary.lastRun, 'd MMM yyyy HH:mm')) as $escapetool.xml($ceSummary.jobUser). $escapetool.xml($ceSummary.lastResult)
+        The daily job last finished on $escapetool.xml($xwiki.formatDate($ceSummary.lastRun, 'd MMM yyyy HH:mm')). $escapetool.xml($ceSummary.lastResult)
       #else
         The daily job has not completed a run yet. It runs at 03:17 as $escapetool.xml($ceSummary.jobUser).
+        #if ("$!ceSummary.lastResult" != '')<strong>$escapetool.xml($ceSummary.lastResult)</strong>#end
       #end
     </p>
   #end

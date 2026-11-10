@@ -123,6 +123,9 @@ class ContentExpiryEngine
     private void stamp(XWikiDocument doc)
     {
         DocumentReference user = xc().getUserReference()
+        if (user == null) {
+            return
+        }
         doc.setAuthorReference(user)
         doc.setContentAuthorReference(user)
         if (doc.isNew()) {
@@ -475,6 +478,7 @@ class ContentExpiryEngine
         out.lastRun = state.lastRun
         out.lastResult = state.lastResult
         out.jobUser = getJobUser()
+        out.jobUserAdmin = isJobUserAdmin()
         out.covered = count(cov.where, cov.params)
         Map stale = filterClause('stale', p, s, now)
         out.stale = count(cov.where + stale.where, cov.params + stale.params)
@@ -725,16 +729,30 @@ class ContentExpiryEngine
     {
         try {
             return runDaily()
+        } catch (SecurityException e) {
+            DocumentReference user = xc().getUserReference()
+            String who = user != null ? serializeLocal(user) : 'nobody'
+            String message = ("The daily job ran as ${who}, who is not a wiki administrator, so nothing was sent. " +
+                'Open the Content expiry settings and click Save to run the job as yourself.').toString()
+            LoggerFactory.getLogger('org.xwiki.contentexpiry').error(message)
+            recordFailure(message)
+            return [ran: false, message: message]
         } catch (Throwable e) {
             LoggerFactory.getLogger('org.xwiki.contentexpiry').error('Content Expiry daily run failed', e)
-            try {
-                updateState('Run failed') { BaseObject o ->
-                    o.setLargeStringValue('lastResult', ('The last run failed: ' + e.getMessage()).toString())
-                }
-            } catch (Throwable ignored) {
-                // Nothing more we can do.
-            }
+            recordFailure('The last run failed: ' + e.getMessage())
             return [ran: false, message: 'The run failed: ' + e.getMessage()]
+        }
+    }
+
+    /** Keeps the reason a run failed on the state page, where the report shows it. Never throws. */
+    private void recordFailure(String message)
+    {
+        try {
+            updateState('Run failed') { BaseObject o ->
+                o.setLargeStringValue('lastResult', message)
+            }
+        } catch (Throwable ignored) {
+            // Nothing more we can do.
         }
     }
 
@@ -1007,6 +1025,36 @@ class ContentExpiryEngine
             doc.getXObject(jobClass).setStringValue('contextUser', user)
             xc.getWiki().saveDocument(doc, "Runs as ${user}".toString(), true, xc)
         }
+        // Always, not only when the page changed: see reloadJob.
+        reloadJob()
+    }
+
+    /**
+     * The scheduler captures the user a job runs as at the moment the job is scheduled, so changing
+     * the job page has no effect until the job is reloaded. An import also puts the placeholder
+     * user back on the page and reschedules with it. Reloading keeps the job's status and cron time.
+     * Checked on 17.10.14.
+     */
+    private void reloadJob()
+    {
+        try {
+            XWikiContext xc = xc()
+            DocumentReference jobClass = new DocumentReference(xc.getWikiId(), 'XWiki', 'SchedulerJobClass')
+            BaseObject job = xc.getWiki().getDocument(codeRef('Job'), xc).getXObject(jobClass)
+            if (job != null) {
+                xc.getWiki().getPlugin('scheduler', xc).reloadJob(job, xc)
+            }
+        } catch (Throwable e) {
+            LoggerFactory.getLogger('org.xwiki.contentexpiry').warn('Could not reload the Content Expiry job: {}', e.getMessage())
+        }
+    }
+
+    /** Whether the user stored on the job page is an administrator, which the daily run needs. */
+    boolean isJobUserAdmin()
+    {
+        requireAdmin()
+        String user = getJobUser()
+        return user ? isAdminUser(resolve(user)) : false
     }
 
     /** Who the scheduled job runs as, or an empty string if the job page is missing. */

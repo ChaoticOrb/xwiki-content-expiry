@@ -40,7 +40,7 @@ In warn mode a scheduled job (Administration > Scheduler, "Content Expiry daily 
 
 Who is warned: the page's owner (Expiry tab), else its creator, else its last editor, skipping anyone who is disabled or has no email address; if none of them can be emailed, the fallback contact (a user, a group or an address). Pages with child pages and excluded pages are not warned about.
 
-The job runs as the admin who last saved the settings, and stops working if that account loses admin rights. If warnings stop, check Administration > Scheduler.
+The job runs as the admin who last saved the settings, and stops working if that account loses admin rights. The scheduler fixes that user at the moment a job is scheduled, and an import schedules it with a placeholder (`XWiki.Admin`), so **after every import, open Content expiry and click Save** to point the job at yourself. The report warns when the job's user is not an administrator, and shows why the last run failed. If warnings stop, check the report first, then Administration > Scheduler.
 
 **Keep** saves the page as a minor edit with the comment "Kept by Content Expiry", which restarts the clock and leaves a line in the page history. It records the person who clicked as the page's author and leaves the content author alone.
 

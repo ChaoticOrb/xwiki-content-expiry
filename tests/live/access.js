@@ -12,7 +12,7 @@ const alice = { user: 'alice', pass: 'alicepass1' };
   // The engine checks admin rights itself, because parseGroovyFromPage only checks who saved the engine
   // page. Simulate a caller with a non-admin context (a script that has programming rights could do this
   // in real life only by being handed the engine) and try every admin method.
-  const methods = ['getSettings()', 'summary()', "report('all', 0, 10)", 'runDaily()', 'runAt(new Date())', 'getJobUser()',
+  const methods = ['getSettings()', 'summary()', "report('all', 0, 10)", 'runDaily()', 'runAt(new Date())', 'getJobUser()', 'isJobUserAdmin()',
     "saveSettings([enabled: '1', mode: 'warn', retentionMonths: '60', warningDays: '60, 30, 7'])"];
   const body = methods.map((m, i) => `try { e.${m}; k('m${i}', 'ALLOWED') } catch (SecurityException ex) { k('m${i}', 'refused') }`).join('\n');
   const acc = await L.groovy(`def e = x.parseGroovyFromPage('ContentExpiry.Code.Engine', ctx)
