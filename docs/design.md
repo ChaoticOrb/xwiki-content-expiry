@@ -1,6 +1,6 @@
 # Content Expiry: design spec
 
-**Status:** v0.3 of the spec, 9 Nov 2026. Versions 0.1 (report only) and 0.2 (warn only) of the extension are built and tested on XWiki 17.10.14 with `tests/live`. Nothing beyond that. 0.3 adds deletion.
+**Status:** v0.4 of the spec, 11 Nov 2026. Versions 0.1 (report only), 0.2 (warn only) and 0.3 (warn and delete) of the extension are built and tested on XWiki 17.10.14 with `tests/live`. 0.2 has also run on a real homelab instance. 0.3 has not been run on one.
 
 Pages that haven't been touched for a configurable period (default 5 years) are flagged, their owner is warned ahead of time, and if nobody keeps them they go to the XWiki recycle bin. Admins configure it from the normal Administration screen. Everyone else only sees warnings and a Keep button.
 
@@ -49,11 +49,28 @@ The job is a Groovy scheduler job whose script calls `runScheduled()`. The sched
 - Clicking posts to the page with a CSRF token. The engine saves the page as a minor edit with the comment "Kept by Content Expiry", resetting `doc.date` and leaving an audit trail in history. XWiki ignores a save that changes nothing, so the engine marks the metadata dirty to force it. It sets the author to the person who clicked and does not touch the content author, so scripts on the page don't start running with that person's rights.
 - Emails link to the page, not to a "keep" URL: a link that changes data on GET is a CSRF risk and mail scanners pre-fetch links.
 
-### Deletion (0.3)
+### Deletion (0.3, built)
 
-On the expiry date the job deletes the page to the recycle bin with its translations and writes a line to the audit log.
+The job deletes a page to the recycle bin with its translations (`deleteAllDocuments(doc, true, context)`, checked on 17.10.14: the page and each translation get their own recycle bin entry, in one batch, with the deleter recorded) and writes a line to the audit log.
 
-**Pages with children are never deleted automatically.** In nested pages, deleting a parent orphans its children. They are listed for an admin instead.
+**A warning that was only attempted never counts.** Deleting on the expiry date alone would delete pages whose owners were never told: a mail server outage, a bad address, or a page that turns up already old after the warnings started (a restore, a migration, a bulk import with old dates). So the engine keeps a **ledger** on `ContentExpiry.Code.State`: for each page, the expiry date it was warned about, when the warning was delivered and the threshold. A page may be deleted only if:
+
+1. its expiry has passed (safety floor included);
+2. the ledger shows a delivered warning at the final threshold for **this exact expiry date**. Any edit moves the expiry date, so a kept or edited page never matches, and entries for pages whose date changed are dropped;
+3. at least the shortest warning period (7 days by default) has passed since that email was delivered, so a warning that went out late still gives the full notice;
+4. it has no child pages and is covered, and a fresh copy of it is checked again just before deleting.
+
+A page already inside its final warning period, or past expiry, with no valid ledger entry gets a **catch-up warning** and then waits out the period. A restored page has no ledger entry and is treated the same way, so restoring never leads to instant re-deletion. Pages nobody can be emailed about never get a ledger entry and so are never deleted.
+
+Other limits: at most 50 deletions per run (a setting), because the worst case of a mistake should be a bad night and not an empty wiki. The settings form needs a confirmation tick to switch to delete mode, and refuses if the wiki's recycle bin is off (`xwiki.recyclebin=0`); a run with the bin off deletes nothing.
+
+**Pages with children are never deleted automatically.** In nested pages, deleting a parent orphans its children. They are listed for an admin on the report page ("Waiting for an admin"), together with pages nobody can be emailed about.
+
+**Audit log.** One page per month, `ContentExpiry.Log.<yyyy-MM>`, hidden, with a page-level rule so only the admin group can view it, because it names pages other people may not be allowed to see. One line per deletion, appended as it happens, naming the page, when it was last changed, when the final warning was delivered, who was warned and which account the job ran as.
+
+**Restoring.** An admin restores from the recycle bin. Restoring the page entry brings back its title and content. Translations have their own entries in the same batch, and restoring the page entry did not bring them back in the 17.10.14 test.
+
+**Checked by hand.** With the recycle bin off in `xwiki.cfg`, the settings refuse delete mode, a delete run deletes nothing and says why, and the report shows a red warning.
 
 ### Which pages are covered
 
@@ -103,7 +120,7 @@ Wiki pages only (XAR). The engine is one Groovy class on `ContentExpiry.Code.Eng
 |---|---|---|
 | `ContentExpiry.Code.ConfigClass` | Settings class | Yes |
 | `ContentExpiry.Code.Settings` | One ConfigClass object: the live settings | **No**, created on first save |
-| `ContentExpiry.Code.StateClass` | `active`, `policyDate`, `retentionMonths`, `maxWarningDays`, `lastRun`, `lastResult`, `retry` | Yes |
+| `ContentExpiry.Code.StateClass` | `active`, `policyDate`, `retentionMonths`, `maxWarningDays`, `lastRun`, `lastResult`, `retry`, `ledger` | Yes |
 | `ContentExpiry.Code.State` | Engine bookkeeping | **No**, created by the engine |
 | `ContentExpiry.Code.Engine` | Groovy engine | Yes |
 | `ContentExpiry.Code.Admin` | ConfigurableClass objects, stylesheet | Yes |
@@ -114,7 +131,7 @@ Wiki pages only (XAR). The engine is one Groovy class on `ContentExpiry.Code.Eng
 | `ContentExpiry.Code.Job` | Scheduler job | Yes |
 | `ContentExpiry.Code.MailTemplate` | `XWiki.Mail` object for the digest | Yes |
 | `ContentExpiry.Code.PageUI` | UI extensions (banner, Expiry tab) and their stylesheet | Yes |
-| `ContentExpiry.Log.<yyyy-mm>` | Audit log | 0.3 |
+| `ContentExpiry.Log.<yyyy-MM>` | Audit log, one page per month, admin view only | **No**, created on the first deletion |
 
 Email uses the Mail Sender API (`mail.sender` script service, loaded from the engine) with a template page holding an `XWiki.Mail` object. Checked on 17.10.14: `createMessage('template', ref, [velocityVariables: ...])` renders the template, but the `headers` parameter did not set recipients, so the engine sets From and To with javax.mail. The template page's variables are `recipientName`, `items` (title, reference, url, lastModifiedText, expiryText, daysLeft, threshold, contactSource), `count`, `mode`, `retentionMonths`, `wikiName`, `wikiUrl`. The wiki's `title` preference can't be used as a name: it is itself a Velocity template. In-app notifications are a maybe: **(unverified)** whether a user-targeted notification type can be defined without Java.
 
@@ -124,7 +141,7 @@ Email uses the Mail Sender API (`mail.sender` script service, loaded from the en
 |---|---|
 | 0.1 | Settings, report, safety floor (report only). Built, tested |
 | 0.2 | Owner field, scheduler job, digest emails, banner and Keep button, Warn-only mode. Built, tested |
-| 0.3 | Deletion to recycle bin, audit log, children list for admins, Warn-and-delete mode |
+| 0.3 | Deletion to recycle bin, audit log, children list for admins, Warn-and-delete mode. Built, tested on a throwaway instance |
 | 0.4 | "My pages" view, editable email template, acceptance tests on a live instance, first release |
 
 ## 8. Open questions

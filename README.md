@@ -3,7 +3,7 @@
 Deletes pages that nobody has changed for a set time (5 years by default), after warning their owners.
 Admins configure it in Administration. Owners get emails and a one-click Keep button.
 
-**Status: 0.2, warn only.** It lists what would expire, emails page owners before the expiry date, and shows a banner with a Keep button on pages that are close to it. It deletes nothing yet: deletion comes in 0.3. See [docs/design.md](docs/design.md) for the plan.
+**Status: 0.3, warn and delete.** It lists what would expire, emails page owners before the expiry date, shows a banner with a Keep button on pages that are close to it, and, if you switch that mode on, moves pages nobody keeps to the recycle bin. Report only and warn only are the default and delete nothing. See [docs/design.md](docs/design.md) for the plan.
 
 Built entirely from wiki pages (Velocity, plus a Groovy engine). No Java to compile.
 
@@ -32,7 +32,7 @@ Import the new XAR over the old one. Your settings are on `ContentExpiry.Code.Se
 - **Administration > Content > Content expiry report**: counts, when the daily job last ran and what it did, and a table of pages with when they were last changed, when they expire and who is warned.
 - **Under every covered page**: a banner with a **Keep this page** button once the page is inside its warning window, and an **Expiry** tab where anyone who can edit the page can set its owner.
 
-Go-live is meant to be: install, leave it in report-only mode for a few weeks and read the report, adjust exclusions, then switch to warn only.
+Go-live is meant to be: install, leave it in report-only mode for a few weeks and read the report, adjust exclusions, then switch to warn only for at least a full warning cycle, and only then to warn and delete.
 
 ### Warnings
 
@@ -41,6 +41,14 @@ In warn mode a scheduled job (Administration > Scheduler, "Content Expiry daily 
 Who is warned: the page's owner (Expiry tab), else its creator, else its last editor, skipping anyone who is disabled or has no email address; if none of them can be emailed, the fallback contact (a user, a group or an address). Pages with child pages and excluded pages are not warned about.
 
 The job runs as the admin who last saved the settings, and stops working if that account loses admin rights. The scheduler fixes that user at the moment a job is scheduled, and an import schedules it with a placeholder (`XWiki.Admin`), so **after every import, open Content expiry and click Save** to point the job at yourself. The report warns when the job's user is not an administrator, and shows why the last run failed. If warnings stop, check the report first, then Administration > Scheduler.
+
+### Deleting
+
+Warn and delete mode moves expired pages, with their translations, to the recycle bin, where an administrator can restore them. Switching to it needs a tick in the settings form, and it refuses to turn on if the wiki's recycle bin is switched off (`xwiki.recyclebin` in `xwiki.cfg`).
+
+A page is deleted only when all of these hold: it has expired; its final warning email was delivered for its current expiry date (a warning that was attempted but failed does not count); at least the shortest warning period, 7 days by default, has passed since that email was delivered; nobody has edited it since; and it has no child pages. A page that turns up already old, for example after a restore or a migration, gets a warning when it is found and then waits out that period, so nothing is deleted without notice. A restored page is warned again and is not deleted at once.
+
+At most 50 pages are deleted per run, a limit you can change in the settings, so a mistake can't empty the wiki in one night. Pages with child pages, and pages nobody can be emailed about, are never deleted. The report lists them under "Waiting for an admin". Every deletion is logged on a page per month, `ContentExpiry.Log.<yyyy-MM>`, which only administrators can view.
 
 **Keep** saves the page as a minor edit with the comment "Kept by Content Expiry", which restarts the clock and leaves a line in the page history. It records the person who clicked as the page's author and leaves the content author alone.
 
