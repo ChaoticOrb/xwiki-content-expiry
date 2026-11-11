@@ -88,5 +88,16 @@
       <unmodifiable>0</unmodifiable>
       <classType>com.xpn.xwiki.objects.classes.TextAreaClass</classType>
     </retry>
+    <ledger>
+      <disabled>0</disabled>
+      <editor>PureText</editor>
+      <name>ledger</name>
+      <number>8</number>
+      <prettyName>Warnings delivered, one page per line</prettyName>
+      <rows>10</rows>
+      <size>60</size>
+      <unmodifiable>0</unmodifiable>
+      <classType>com.xpn.xwiki.objects.classes.TextAreaClass</classType>
+    </ledger>
   </class>
 </xwikidoc>

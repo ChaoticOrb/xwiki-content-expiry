@@ -53,6 +53,14 @@
     </p>
   #end
 
+  #if ($s.mode == 'delete' && !$ceSummary.recycleBin)
+    <div class="box errormessage">The wiki's recycle bin is switched off, so nothing will be deleted. Switch it on in <tt>xwiki.cfg</tt> first.</div>
+  #end
+  #if ($s.mode == 'delete')
+    #set ($ceMonth = $xwiki.formatDate($xwiki.date, 'yyyy-MM'))
+    <p class="ce-note">Deleted pages are listed in the <a href="$escapetool.xml($xwiki.getURL("ContentExpiry.Log.${ceMonth}"))">audit log for this month</a> and can be restored from the recycle bin. At most $s.maxDeletions are deleted per run.</p>
+  #end
+
   <ul class="ce-cards">
     <li><span class="ce-card-number">$ceSummary.covered</span><span class="ce-card-label">pages covered</span></li>
     <li><span class="ce-card-number">$ceSummary.stale</span><span class="ce-card-label">unchanged for $s.retentionMonths months or more</span></li>
@@ -67,6 +75,16 @@
     <li#if ($ceFilter == 'stale') class="active"#end><a href="#ceReportUrl('stale', 1)">Past the retention period</a></li>
     <li#if ($ceFilter == 'all') class="active"#end><a href="#ceReportUrl('all', 1)">All covered pages</a></li>
   </ul>
+
+  #if ($s.mode == 'delete' && !$ceSummary.waiting.isEmpty())
+    <h2 class="ce-heading">Waiting for an admin</h2>
+    <p class="ce-hint">These pages have expired but nothing will delete them without you. They are not counted in the summary above.</p>
+    <ul class="ce-waiting">
+    #foreach ($w in $ceSummary.waiting)
+      <li><a href="$escapetool.xml($w.url)">$escapetool.xml($w.title)</a> <span class="ce-ref">$escapetool.xml($w.fullName)</span> $escapetool.xml($w.reason)</li>
+    #end
+    </ul>
+  #end
 
   #if ($ceReport.total == 0)
     <p class="ce-empty">

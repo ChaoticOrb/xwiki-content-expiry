@@ -5,11 +5,11 @@ Hello $recipientName,
 #foreach ($i in $items)
 * $i.title
   $i.url
-  Last changed $i.lastModifiedText. Expires $i.expiryText#if ($i.daysLeft > 0) (in $i.daysLeft days)#end.
+  Last changed $i.lastModifiedText.#if ($mode == 'delete') Will be deleted on $i.deleteOnText.#{else} Expires $i.expiryText#if ($i.daysLeft > 0) (in $i.daysLeft days)#end.#end
 
 #end
 #if ($mode == 'delete')
-When a page expires it is moved to the recycle bin, where a wiki administrator can restore it.
+On the date shown each page is moved to the recycle bin, where a wiki administrator can restore it, unless someone keeps it first.
 #else
 This wiki is set to warn only, so nothing is deleted automatically at the moment.
 #end

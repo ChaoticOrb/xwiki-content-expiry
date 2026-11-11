@@ -1,15 +1,15 @@
 <p>Hello $escapetool.xml($recipientName),</p>
 <p>#if ($count == 1)This page on $escapetool.xml($wikiName) hasn't been changed for a long time and is approaching its expiry date.#{else}These $count pages on $escapetool.xml($wikiName) haven't been changed for a long time and are approaching their expiry dates.#end</p>
 <table cellpadding="6" cellspacing="0" style="border-collapse:collapse">
-  <tr style="text-align:left;border-bottom:1px solid #ccc"><th>Page</th><th>Last changed</th><th>Expires</th></tr>
+  <tr style="text-align:left;border-bottom:1px solid #ccc"><th>Page</th><th>Last changed</th><th>#if ($mode == 'delete')Deleted on#{else}Expires#end</th></tr>
 #foreach ($i in $items)
   <tr style="border-bottom:1px solid #eee">
     <td><a href="$escapetool.xml($i.url)">$escapetool.xml($i.title)</a></td>
     <td>$escapetool.xml($i.lastModifiedText)</td>
-    <td>$escapetool.xml($i.expiryText)#if ($i.daysLeft > 0) (in $i.daysLeft days)#end</td>
+    <td>#if ($mode == 'delete')$escapetool.xml($i.deleteOnText)#{else}$escapetool.xml($i.expiryText)#if ($i.daysLeft > 0) (in $i.daysLeft days)#end#end</td>
   </tr>
 #end
 </table>
-<p>#if ($mode == 'delete')When a page expires it is moved to the recycle bin, where a wiki administrator can restore it.#else This wiki is set to warn only, so nothing is deleted automatically at the moment.#end</p>
+<p>#if ($mode == 'delete')On the date shown each page is moved to the recycle bin, where a wiki administrator can restore it, unless someone keeps it first.#else This wiki is set to warn only, so nothing is deleted automatically at the moment.#end</p>
 <p>To keep a page, open it and click <strong>Keep this page</strong>, or edit and save it. Either restarts the clock for $retentionMonths months.</p>
 <p style="color:#666;font-size:90%">You are getting this email because you are the page's owner, creator or last editor, or the wiki's fallback contact.</p>

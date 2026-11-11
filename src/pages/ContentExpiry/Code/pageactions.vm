@@ -40,7 +40,9 @@
 <div class="ce-banner" role="alert">
   <div class="ce-banner-text">
     <strong>
-    #if ($ceBanner.daysLeft <= 0)
+    #if ($ceBanner.daysLeft <= 0 && $ceBanner.mode == 'delete')
+      This page has reached its expiry date and is due to be deleted.
+    #elseif ($ceBanner.daysLeft <= 0)
       This page has reached its expiry date.
     #elseif ($ceBanner.mode == 'delete')
       This page is due to be deleted on $escapetool.xml($xwiki.formatDate($ceBanner.expiry, 'd MMMM yyyy')) (in $ceBanner.daysLeft days).

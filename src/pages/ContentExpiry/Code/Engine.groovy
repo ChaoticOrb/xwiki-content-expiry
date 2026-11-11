@@ -61,10 +61,16 @@ class ContentExpiryEngine
         'XWiki.XWikiSkins', 'Blog.CategoryClass'
     ]
 
-    /** Modes in order of how much they do. 'delete' arrives in 0.3. */
+    /** Modes in order of how much they do. */
     static final List<String> MODES = ['report', 'warn', 'delete']
 
-    static final List<String> AVAILABLE_MODES = ['report', 'warn']
+    static final List<String> AVAILABLE_MODES = ['report', 'warn', 'delete']
+
+    /** Pages deleted per run, unless the admin sets another limit. Limits the damage if something is wrong. */
+    static final int DEFAULT_MAX_DELETIONS = 50
+
+    /** Month pages of the audit log live here, for example ContentExpiry.Log.2026-11. */
+    static final List<String> LOG_SPACE = ['ContentExpiry', 'Log']
 
     /** Only one run at a time per server. A new engine class (after an import) starts unlocked. */
     /** How long a failed warning keeps being retried. */
@@ -185,6 +191,8 @@ class ContentExpiryEngine
         s.fallbackContact = (obj != null ? obj.getStringValue('fallbackContact') : '') ?: 'XWiki.XWikiAdminGroup'
         s.senderAddress = (obj != null ? obj.getStringValue('senderAddress') : '') ?: ''
         s.effectiveSender = s.senderAddress ?: adminEmail()
+        int maxDeletions = obj != null ? obj.getIntValue('maxDeletions', 0) : 0
+        s.maxDeletions = maxDeletions > 0 ? maxDeletions : DEFAULT_MAX_DELETIONS
         // Warnings and deletions only happen when enabled and not in report-only mode.
         s.active = s.enabled && s.mode != 'report'
         s.lastSavedBy = obj != null ? serializeLocal(doc.getAuthorReference()) : ''
@@ -215,7 +223,8 @@ class ContentExpiryEngine
      * Validate and save settings from the admin form.
      *
      * @param input raw form values: enabled ('1' or absent), mode, retentionMonths, warningDays,
-     *              includedSpaces, excludedSpaces, exemptPages, fallbackContact, senderAddress
+     *              includedSpaces, excludedSpaces, exemptPages, fallbackContact, senderAddress,
+     *              maxDeletions, confirmDelete ('1' when switching to delete mode)
      * @return [ok: true] or [ok: false, errors: [field: message]]
      */
     Map saveSettings(Map input)
@@ -227,6 +236,23 @@ class ContentExpiryEngine
         String mode = (input.mode ?: 'report').toString()
         if (!AVAILABLE_MODES.contains(mode)) {
             errors.mode = 'That mode is not available in this version.'
+        } else if (mode == 'delete') {
+            if (!xc.getWiki().hasRecycleBin(xc)) {
+                errors.mode = 'The wiki has its recycle bin switched off, so deleted pages could not be restored. Switch it on in xwiki.cfg first.'
+            } else if (readSettings().mode != 'delete' && !input.confirmDelete) {
+                errors.confirmDelete = 'Tick the box to confirm.'
+            }
+        }
+
+        // Optional: an empty value means the default.
+        int maxDeletions = DEFAULT_MAX_DELETIONS
+        String maxText = (input.maxDeletions ?: '').toString().trim()
+        if (maxText) {
+            if (!(maxText ==~ /\d{1,5}/) || maxText.toInteger() < 1) {
+                errors.maxDeletions = 'Enter a whole number of pages, for example 50.'
+            } else {
+                maxDeletions = maxText.toInteger()
+            }
         }
 
         Integer months = null
@@ -289,6 +315,7 @@ class ContentExpiryEngine
         obj.setLargeStringValue('exemptPages', exempt.join('\n'))
         obj.setStringValue('fallbackContact', fallback ?: 'XWiki.XWikiAdminGroup')
         obj.setStringValue('senderAddress', sender)
+        obj.setIntValue('maxDeletions', maxDeletions)
         doc.setHidden(true)
         if (doc.isNew()) {
             doc.setTitle('Content Expiry settings')
@@ -445,6 +472,9 @@ class ContentExpiryEngine
         Date cutoff
         if (filter == 'stale') {
             cutoff = p.retentionCutoff(now)
+        } else if (filter == 'expired') {
+            // Pages whose expiry, safety floor included, is already behind us.
+            cutoff = p.lastModifiedCutoff(now, now)
         } else {
             cutoff = p.lastModifiedCutoff(Policy.addDays(now, Policy.maxWarning(s.warningDays)), now)
         }
@@ -479,6 +509,8 @@ class ContentExpiryEngine
         out.lastResult = state.lastResult
         out.jobUser = getJobUser()
         out.jobUserAdmin = isJobUserAdmin()
+        out.recycleBin = xc().getWiki().hasRecycleBin(xc())
+        out.waiting = s.mode == 'delete' && s.active ? waitingForAdmin(50) : []
         out.covered = count(cov.where, cov.params)
         Map stale = filterClause('stale', p, s, now)
         out.stale = count(cov.where + stale.where, cov.params + stale.params)
@@ -664,7 +696,8 @@ class ContentExpiryEngine
             policyDate: state != null ? state.getDateValue('policyDate') : null,
             lastRun: state != null ? state.getDateValue('lastRun') : null,
             lastResult: state != null ? (state.getLargeStringValue('lastResult') ?: '') : '',
-            retry: state != null ? (state.getLargeStringValue('retry') ?: '') : ''
+            retry: state != null ? (state.getLargeStringValue('retry') ?: '') : '',
+            ledger: state != null ? (state.getLargeStringValue('ledger') ?: '') : ''
         ]
     }
 
@@ -767,10 +800,13 @@ class ContentExpiryEngine
         }
 
         Policy p = policy(s, policyDate)
+        int minWarning = Policy.minWarning(s.warningDays)
+        Map<String, long[]> ledger = Policy.parseLedger(state.ledger)
         Map cov = coverage(s)
         Map clause = filterClause('due', p, s, now)
         Map people = [:]
         int pages = 0
+        int catchUps = 0
         int withChildren = 0
         int noRecipient = 0
         List<String> failed = []
@@ -789,12 +825,16 @@ class ContentExpiryEngine
                     break
                 }
                 for (Object[] r : rows) {
+                    String name = (String) r[0]
                     Date expiry = p.expiry((Date) r[1], now)
                     List<Integer> hit = p.crossed(expiry, from, now)
-                    if (hit.isEmpty()) {
+                    // A page that is already in its final warning period (or past expiry) and has no delivered
+                    // final warning gets one now. This covers pages that turn up late and failed deliveries.
+                    boolean catchUp = hit.isEmpty() && p.inFinalWindow(expiry, now) && !p.finalWarned(ledger.get(name), expiry)
+                    if (hit.isEmpty() && !catchUp) {
                         continue
                     }
-                    Map row = row((String) r[0], (Date) r[1], p, s, now)
+                    Map row = row(name, (Date) r[1], p, s, now)
                     if (row.status == 'excluded') {
                         continue
                     }
@@ -808,11 +848,10 @@ class ContentExpiryEngine
                         continue
                     }
                     pages++
-                    Map item = [title: row.title, reference: row.fullName, url: row.externalUrl,
-                        lastModified: row.lastModified, lastModifiedText: mailDate(row.lastModified),
-                        expiry: row.expiry, expiryText: mailDate(row.expiry), daysLeft: row.daysLeft,
-                        threshold: Policy.minOf(hit), contactSource: row.contactSource, since: now.getTime()]
-                    addresses.each { Map a -> addItem(people, a.email, a.name, item) }
+                    if (catchUp) {
+                        catchUps++
+                    }
+                    addresses.each { Map a -> addItem(people, a.email, a.name, newItem(row, p, expiry, now, catchUp ? minWarning : Policy.minOf(hit), catchUp, now.getTime())) }
                 }
                 offset += 200
             }
@@ -826,6 +865,7 @@ class ContentExpiryEngine
             Map result = sendDigest(s, person, now)
             if (result.ok) {
                 emails++
+                person.items.each { Map item -> item.delivered = true }
             } else {
                 failed << "${person.email}: ${result.error}".toString()
                 person.items.each { Map item ->
@@ -834,6 +874,18 @@ class ContentExpiryEngine
                 }
             }
         }
+        // Only a warning that was delivered counts towards deleting a page.
+        people.values().each { Map person ->
+            person.items.findAll { it.delivered }.each { Map item ->
+                ledger.put(item.reference, Policy.mergeLedger(ledger.get(item.reference), item.expiryMillis, now.getTime(), item.threshold))
+            }
+        }
+
+        Map deletion = [deleted: 0, held: 0, notReady: 0, capped: false, failed: 0, trashOff: false]
+        if (s.mode == 'delete') {
+            deletion = deleteExpired(s, p, now, ledger)
+        }
+        pruneLedger(ledger, p, now)
 
         StringBuilder text = new StringBuilder()
         if (pages == 0 && failed.isEmpty()) {
@@ -841,11 +893,14 @@ class ContentExpiryEngine
         } else {
             text.append("Warned about ${pages} page(s) in ${emails} email(s).".toString())
         }
+        if (catchUps > 0) {
+            text.append(" ${catchUps} of them were late: already close to or past expiry, so they get ${minWarning} days from this warning.".toString())
+        }
         if (withChildren > 0) {
             text.append(" ${withChildren} page(s) with child pages were left for an admin.".toString())
         }
         if (noRecipient > 0) {
-            text.append(" ${noRecipient} page(s) had nobody to email.".toString())
+            text.append(" ${noRecipient} page(s) had nobody to email, so they will not be deleted.".toString())
         }
         if (retried > 0) {
             text.append(" Included ${retried} page(s) retried from an earlier failure.".toString())
@@ -853,14 +908,230 @@ class ContentExpiryEngine
         if (!failed.isEmpty()) {
             text.append(" ${failed.size()} email(s) failed and will be retried: ${failed.join('; ')}".toString())
         }
+        if (s.mode == 'delete') {
+            if (deletion.trashOff) {
+                text.append(' Nothing was deleted: the wiki\'s recycle bin is switched off.')
+            } else {
+                text.append(" Deleted ${deletion.deleted} page(s) to the recycle bin.".toString())
+                if (deletion.capped) {
+                    text.append(" Stopped at the limit of ${s.maxDeletions} per run; the rest follow on the next runs.".toString())
+                }
+                if (deletion.notReady > 0) {
+                    text.append(" ${deletion.notReady} expired page(s) are waiting for their final warning period.".toString())
+                }
+                if (deletion.failed > 0) {
+                    text.append(" ${deletion.failed} page(s) could not be deleted, see the wiki log.".toString())
+                }
+            }
+        }
         String summary = text.toString()
+        String ledgerText = Policy.formatLedger(ledger)
         updateState('Run finished') { BaseObject o ->
             o.setDateValue('lastRun', now)
             o.setLargeStringValue('lastResult', summary)
             o.setLargeStringValue('retry', stillFailing.join('\n'))
+            o.setLargeStringValue('ledger', ledgerText)
         }
         return [ran: true, message: summary, pages: pages, emails: emails, failed: failed,
-            withChildren: withChildren, noRecipient: noRecipient]
+            withChildren: withChildren, noRecipient: noRecipient, catchUps: catchUps,
+            deleted: deletion.deleted, held: deletion.held, capped: deletion.capped]
+    }
+
+    /** One page in a digest. deleteOnText is when it can go: expiry, or later if its final warning is late. */
+    private Map newItem(Map row, Policy p, Date expiry, Date now, int threshold, boolean catchUp, long since)
+    {
+        return [title: row.title, reference: row.fullName, url: row.externalUrl,
+            lastModified: row.lastModified, lastModifiedText: mailDate(row.lastModified),
+            expiry: row.expiry, expiryText: mailDate(row.expiry), daysLeft: row.daysLeft,
+            deleteOnText: mailDate(p.deleteDate(expiry, now)), expiryMillis: expiry.getTime(),
+            threshold: threshold, catchUp: catchUp, contactSource: row.contactSource,
+            since: since, delivered: false]
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // Deletion
+    // ------------------------------------------------------------------------------------------
+
+    /**
+     * Deletes pages that have expired, and only those whose final warning email was delivered for
+     * their current expiry date at least the shortest warning period ago. Pages go to the recycle
+     * bin with their translations. Pages with child pages are never deleted here. Each page is
+     * checked again just before deleting, and at most maxDeletions are deleted per run, so a
+     * mistake can't empty the wiki in one night.
+     */
+    private Map deleteExpired(Map s, Policy p, Date now, Map<String, long[]> ledger)
+    {
+        Map result = [deleted: 0, held: 0, notReady: 0, capped: false, failed: 0, trashOff: false]
+        XWikiContext xc = xc()
+        if (!xc.getWiki().hasRecycleBin(xc)) {
+            result.trashOff = true
+            return result
+        }
+        Map clause = filterClause('expired', p, s, now)
+        if (clause == null) {
+            return result
+        }
+        Map cov = coverage(s)
+        String where = cov.where + clause.where
+        Map params = cov.params + clause.params
+        int skipped = 0
+        boolean more = true
+        while (more) {
+            Query q = hql(("select doc.fullName, doc.date from XWikiDocument doc where ${where} " +
+                'order by doc.date asc, doc.fullName asc').toString(), params)
+            // Pages deleted in this loop drop out of the result, so only the ones left behind are skipped over.
+            q.setOffset(skipped)
+            q.setLimit(200)
+            List rows = q.execute()
+            if (rows.isEmpty()) {
+                break
+            }
+            for (Object[] r : rows) {
+                String name = (String) r[0]
+                Date date = (Date) r[1]
+                Date expiry = p.expiry(date, now)
+                long[] entry = ledger.get(name)
+                if (!p.mayDelete(entry, expiry, now)) {
+                    result.notReady++
+                    skipped++
+                    continue
+                }
+                Map row = row(name, date, p, s, now)
+                if (row.status == 'excluded') {
+                    skipped++
+                    continue
+                }
+                if (row.hasChildren) {
+                    result.held++
+                    skipped++
+                    continue
+                }
+                DocumentReference ref = resolve(name)
+                XWikiDocument doc = xc.getWiki().getDocument(ref, xc)
+                if (doc.isNew() || doc.getDate().getTime() != date.getTime() || !isCovered(ref, doc, s) || hasChildren(doc)) {
+                    skipped++
+                    continue
+                }
+                if (result.deleted >= s.maxDeletions) {
+                    result.capped = true
+                    more = false
+                    break
+                }
+                try {
+                    xc.getWiki().deleteAllDocuments(doc, true, xc)
+                    result.deleted++
+                    ledger.remove(name)
+                    logDeletion(now, name, row.title, date, new Date(entry[1]), "${row.contact} (${row.contactSource})".toString())
+                } catch (Exception e) {
+                    LoggerFactory.getLogger('org.xwiki.contentexpiry').error('Could not delete {}', name, e)
+                    result.failed++
+                    skipped++
+                }
+            }
+        }
+        return result
+    }
+
+    /** Drops ledger entries for pages that are gone or whose expiry date has changed since they were warned. */
+    private void pruneLedger(Map<String, long[]> ledger, Policy p, Date now)
+    {
+        if (ledger.isEmpty()) {
+            return
+        }
+        Map<String, Date> current = [:]
+        List<String> names = new ArrayList<String>(ledger.keySet())
+        for (int i = 0; i < names.size(); i += 500) {
+            List<String> chunk = names.subList(i, Math.min(i + 500, names.size()))
+            hql('select doc.fullName, doc.date from XWikiDocument doc where doc.translation = 0 and doc.fullName in (:ledgerNames)',
+                [ledgerNames: chunk]).execute().each { Object[] r -> current.put((String) r[0], (Date) r[1]) }
+        }
+        names.each { String name ->
+            Date date = current.get(name)
+            if (date == null || p.expiry(date, now).getTime() != ledger.get(name)[0]) {
+                ledger.remove(name)
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // Audit log
+    // ------------------------------------------------------------------------------------------
+
+    private static String verbatim(Object text)
+    {
+        return '{{{' + (text ?: '').toString().replaceAll(/[\r\n]+/, ' ').replace('}}}', '} } }') + '}}}'
+    }
+
+    /**
+     * Adds a line about a deletion to this month's log page, ContentExpiry.Log.yyyy-MM. The page is
+     * hidden and only administrators can view it, because it names pages other people may not see.
+     */
+    private void logDeletion(Date now, String name, String title, Date lastChanged, Date warned, String contact)
+    {
+        XWikiContext xc = xc()
+        String month = new java.text.SimpleDateFormat('yyyy-MM', Locale.ENGLISH).format(now)
+        DocumentReference ref = new DocumentReference(xc.getWikiId(), LOG_SPACE, month)
+        XWikiDocument doc = xc.getWiki().getDocument(ref, xc).clone()
+        if (doc.isNew()) {
+            doc.setTitle("Content Expiry log ${month}".toString())
+            doc.setSyntaxId('xwiki/2.1')
+            doc.setHidden(true)
+            doc.setContent('Pages deleted by Content Expiry, one line each. They are in the recycle bin and an administrator can restore them.\n\n')
+            BaseObject rights = doc.getXObject(new DocumentReference(xc.getWikiId(), 'XWiki', 'XWikiRights'), true, xc)
+            rights.setStringValue('groups', 'XWiki.XWikiAdminGroup')
+            rights.setStringValue('levels', 'view,edit')
+            rights.setIntValue('allow', 1)
+        }
+        java.text.SimpleDateFormat fmt = new java.text.SimpleDateFormat('yyyy-MM-dd HH:mm z', Locale.ENGLISH)
+        DocumentReference user = xc.getUserReference()
+        String line = ("* ${fmt.format(now)}: deleted ${verbatim(name)} (${verbatim(title)}). " +
+            "Last changed ${fmt.format(lastChanged)}. Final warning delivered ${fmt.format(warned)}. " +
+            "Warned: ${verbatim(contact)}. Run as ${verbatim(user != null ? serializeLocal(user) : 'nobody')}.\n").toString()
+        doc.setContent(doc.getContent() + line)
+        stamp(doc)
+        xc.getWiki().saveDocument(doc, "Deleted ${name}".toString(), true, xc)
+    }
+
+    /**
+     * Expired pages that nothing will delete without an admin: pages with child pages, and pages
+     * nobody can be emailed about (an unwarned page is never deleted). Looks at up to 400 expired pages.
+     */
+    List<Map> waitingForAdmin(int limit)
+    {
+        requireAdmin()
+        Map s = readSettings()
+        Date policyDate = readState().policyDate
+        List<Map> out = []
+        if (!s.active || policyDate == null) {
+            return out
+        }
+        Date now = new Date()
+        Policy p = policy(s, policyDate)
+        Map clause = filterClause('expired', p, s, now)
+        if (clause == null) {
+            return out
+        }
+        Map cov = coverage(s)
+        Query q = hql(("select doc.fullName, doc.date from XWikiDocument doc where ${cov.where + clause.where} " +
+            'order by doc.date asc, doc.fullName asc').toString(), cov.params + clause.params)
+        q.setLimit(400)
+        for (Object[] r : q.execute()) {
+            if (out.size() >= limit) {
+                break
+            }
+            Map row = row((String) r[0], (Date) r[1], p, s, now)
+            if (row.status == 'excluded') {
+                continue
+            }
+            if (row.hasChildren) {
+                out << [fullName: row.fullName, title: row.title, url: row.url, expiry: row.expiry,
+                    reason: 'Has child pages. Nothing deletes it automatically, so decide what happens to it and its children.']
+            } else if (addressesFor(row.contact).isEmpty()) {
+                out << [fullName: row.fullName, title: row.title, url: row.url, expiry: row.expiry,
+                    reason: 'Nobody can be emailed about it, so it will not be deleted. Set an owner, or make sure the fallback contact has an email address.']
+            }
+        }
+        return out
     }
 
     // ------------------------------------------------------------------------------------------
@@ -906,10 +1177,7 @@ class ContentExpiryEngine
                 return
             }
             Map row = row(f[3], doc.getDate(), p, s, now)
-            Map item = [title: row.title, reference: row.fullName, url: row.externalUrl,
-                lastModified: row.lastModified, lastModifiedText: mailDate(row.lastModified),
-                expiry: row.expiry, expiryText: mailDate(row.expiry), daysLeft: row.daysLeft,
-                threshold: f[4].toInteger(), contactSource: row.contactSource, since: f[0].toLong()]
+            Map item = newItem(row, p, expiry, now, f[4].toInteger(), false, f[0].toLong())
             addItem(people, f[1], f[2], item)
             added++
         }
@@ -1349,6 +1617,82 @@ class ContentExpiryEngine
                 }
             }
             return hit;
+        }
+
+        /**
+         * The soonest a page may be deleted: its expiry date, but never sooner than the shortest
+         * warning period after its final warning email was delivered. A page that surfaces late
+         * (a restore, a migration) is warned when it is found and then waits out that period.
+         */
+        java.util.Date deleteDate(java.util.Date expiry, java.util.Date finalWarned)
+        {
+            java.util.Date afterWarning = addDays(finalWarned, minWarning(this.warningDays));
+            return afterWarning.after(expiry) ? afterWarning : expiry;
+        }
+
+        /** True once the page is past its expiry or inside the shortest warning period. */
+        boolean inFinalWindow(java.util.Date expiry, java.util.Date now)
+        {
+            return !expiry.after(now) || daysLeft(expiry, now) <= minWarning(this.warningDays);
+        }
+
+        /**
+         * Whether a warning ledger entry (expiry, delivered at, threshold in days) shows that the
+         * final warning was delivered for this exact expiry date. An edit moves the expiry date,
+         * so a kept page never matches.
+         */
+        boolean finalWarned(long[] entry, java.util.Date expiry)
+        {
+            return entry != null && entry[0] == expiry.getTime() && entry[2] <= minWarning(this.warningDays);
+        }
+
+        /** Deletion is allowed only after the final warning was delivered and its waiting period is over. */
+        boolean mayDelete(long[] entry, java.util.Date expiry, java.util.Date now)
+        {
+            if (!finalWarned(entry, expiry)) {
+                return false;
+            }
+            return !now.before(deleteDate(expiry, new java.util.Date(entry[1])));
+        }
+
+        /** Records a delivered warning: a new expiry date or a more urgent threshold replaces the entry. */
+        static long[] mergeLedger(long[] old, long expiryMillis, long warnedMillis, int threshold)
+        {
+            if (old == null || old[0] != expiryMillis || threshold < old[2]) {
+                return new long[] {expiryMillis, warnedMillis, threshold};
+            }
+            return old;
+        }
+
+        /** One page per line: name, expiry, delivered at, threshold. A damaged line is ignored, which only means no deletion. */
+        static java.util.Map<String, long[]> parseLedger(String text)
+        {
+            java.util.Map<String, long[]> ledger = new java.util.TreeMap<String, long[]>();
+            if (text == null) {
+                return ledger;
+            }
+            for (String line : text.split("\\n")) {
+                String[] f = line.trim().split("\\|");
+                if (f.length != 4) {
+                    continue;
+                }
+                try {
+                    ledger.put(f[0], new long[] {Long.parseLong(f[1]), Long.parseLong(f[2]), Long.parseLong(f[3])});
+                } catch (NumberFormatException e) {
+                    // Ignore it.
+                }
+            }
+            return ledger;
+        }
+
+        static String formatLedger(java.util.Map<String, long[]> ledger)
+        {
+            StringBuilder out = new StringBuilder();
+            for (java.util.Map.Entry<String, long[]> e : ledger.entrySet()) {
+                long[] v = e.getValue();
+                out.append(e.getKey()).append("|").append(v[0]).append("|").append(v[1]).append("|").append(v[2]).append("\n");
+            }
+            return out.toString();
         }
 
         /** Whole days from now until expiry, rounded up; zero or negative once expired. */

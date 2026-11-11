@@ -24,7 +24,9 @@
       'excludedSpaces': "$!request.ceExcludedSpaces",
       'exemptPages': "$!request.ceExemptPages",
       'fallbackContact': "$!request.ceFallbackContact",
-      'senderAddress': "$!request.ceSenderAddress"
+      'senderAddress': "$!request.ceSenderAddress",
+      'maxDeletions': "$!request.ceMaxDeletions",
+      'confirmDelete': "$!request.ceConfirmDelete"
     })
     #set ($ceResult = $ceEngine.saveSettings($ceInput))
     #if ($ceResult.ok)
@@ -48,7 +50,8 @@
     'excludedSpaces': "$!request.ceExcludedSpaces",
     'exemptPages': "$!request.ceExemptPages",
     'fallbackContact': "$!request.ceFallbackContact",
-    'senderAddress': "$!request.ceSenderAddress"
+    'senderAddress': "$!request.ceSenderAddress",
+    'maxDeletions': "$!request.ceMaxDeletions"
   })
 #else
   #set ($v = {
@@ -60,7 +63,8 @@
     'excludedSpaces': $s.excludedSpacesText,
     'exemptPages': $s.exemptPagesText,
     'fallbackContact': $s.fallbackContact,
-    'senderAddress': $s.senderAddress
+    'senderAddress': $s.senderAddress,
+    'maxDeletions': "$s.maxDeletions"
   })
 #end
 ##
@@ -82,7 +86,7 @@
 <div class="content-expiry">
   <p class="ce-intro">Pages that nobody has changed for the retention period are listed in the
     <a href="$escapetool.xml($doc.getURL('admin', 'editor=globaladmin&section=contentExpiryReport'))">Content expiry report</a>.
-    In warn mode, page owners are emailed before the expiry date and can keep a page with one click. Deleting pages arrives in a later version.</p>
+    In warn mode, page owners are emailed before the expiry date and can keep a page with one click. In warn and delete mode, pages that nobody keeps are then moved to the recycle bin.</p>
   <div class="ce-status">
     #if ($s.enabled)
       <span class="ce-badge ce-badge-on">On</span>
@@ -117,7 +121,11 @@
       <dd>
         <label class="ce-radio"><input type="radio" name="ceMode" value="report"#if ($v.mode == 'report' || "$!v.mode" == '') checked="checked"#end /> Report only: list pages, send no emails, delete nothing</label>
         <label class="ce-radio"><input type="radio" name="ceMode" value="warn"#if ($v.mode == 'warn') checked="checked"#end /> Warn only: email page owners and show a banner with a Keep button, delete nothing</label>
-        <label class="ce-radio ce-disabled"><input type="radio" name="ceMode" value="delete" disabled="disabled" /> Warn and delete: email owners, then move expired pages to the recycle bin <em>(coming in a later version)</em></label>
+        <label class="ce-radio"><input type="radio" name="ceMode" value="delete"#if ($v.mode == 'delete') checked="checked"#end /> Warn and delete: email owners, then move expired pages to the recycle bin</label>
+        #if ($s.mode != 'delete')
+        <label class="ce-radio ce-confirm"><input type="checkbox" name="ceConfirmDelete" value="1" /> I have read the report and checked who would be warned, and I understand that pages nobody keeps will be moved to the recycle bin.</label>
+        #ceFieldError('confirmDelete')
+        #end
       </dd>
 
       <dt>
@@ -133,6 +141,13 @@
         #ceFieldError('warningDays')
       </dt>
       <dd><input type="text" id="ceWarningDays" name="ceWarningDays" value="$escapetool.xml($v.warningDays)" /></dd>
+
+      <dt>
+        <label for="ceMaxDeletions">Most pages deleted per run</label>
+        <span class="xHint">A safety limit for warn and delete mode. If more pages are ready, the rest follow on the next nightly runs. Deleted pages can be restored from the recycle bin.</span>
+        #ceFieldError('maxDeletions')
+      </dt>
+      <dd><input type="number" min="1" max="99999" id="ceMaxDeletions" name="ceMaxDeletions" value="$escapetool.xml($v.maxDeletions)" /></dd>
 
       <dt>
         <label for="ceIncludedSpaces">Only these spaces</label>
