@@ -19,3 +19,9 @@
 .ce-owner-form label { display: block; font-weight: bold; }
 .ce-owner-form .xHint { display: block; margin: 0.25em 0 0.5em; }
 .ce-owner-form input[type=text] { max-width: 24em; margin-right: 0.5em; }
+.ce-mypages .ce-table { width: 100%; border-collapse: collapse; margin: 1em 0; }
+.ce-mypages .ce-table th, .ce-mypages .ce-table td { padding: 0.5em 0.75em; border-bottom: 1px solid #ddd; text-align: left; vertical-align: top; }
+.ce-mypages .ce-ref { display: block; color: #777; font-size: 0.9em; }
+.ce-mypages form { margin: 0; }
+.ce-mypages .ce-row-expired td:nth-child(3) { color: #a94442; font-weight: bold; }
+.ce-mypages .ce-admin-links { margin-top: 2em; color: #777; }

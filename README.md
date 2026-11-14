@@ -3,7 +3,7 @@
 Deletes pages that nobody has changed for a set time (5 years by default), after warning their owners.
 Admins configure it in Administration. Owners get emails and a one-click Keep button.
 
-**Status: 0.3, warn and delete.** It lists what would expire, emails page owners before the expiry date, shows a banner with a Keep button on pages that are close to it, and, if you switch that mode on, moves pages nobody keeps to the recycle bin. Report only and warn only are the default and delete nothing. See [docs/design.md](docs/design.md) for the plan.
+**Status: 0.4, warn and delete.** It lists what would expire, emails page owners before the expiry date, shows a banner with a Keep button on pages that are close to it, and, if you switch that mode on, moves pages nobody keeps to the recycle bin. Report only and warn only are the default and delete nothing. See [docs/design.md](docs/design.md) for the plan.
 
 Built entirely from wiki pages (Velocity, plus a Groovy engine). No Java to compile.
 
@@ -30,6 +30,7 @@ Import the new XAR over the old one. Your settings are on `ContentExpiry.Code.Se
 
 - **Administration > Content > Content expiry**: turn it on, pick the mode, and set the retention period, warning days, which spaces it covers, which pages are exempt, the fallback contact and the sender address.
 - **Administration > Content > Content expiry report**: counts, when the daily job last ran and what it did, and a table of pages with when they were last changed, when they expire and who is warned.
+- **ContentExpiry.WebHome** ("My pages"): any signed-in user sees the pages they would be warned about, each with a Keep button. The warning emails link to it.
 - **Under every covered page**: a banner with a **Keep this page** button once the page is inside its warning window, and an **Expiry** tab where anyone who can edit the page can set its owner.
 
 Go-live is meant to be: install, leave it in report-only mode for a few weeks and read the report, adjust exclusions, then switch to warn only for at least a full warning cycle, and only then to warn and delete.
@@ -50,7 +51,17 @@ A page is deleted only when all of these hold: it has expired; its final warning
 
 At most 50 pages are deleted per run, a limit you can change in the settings, so a mistake can't empty the wiki in one night. Pages with child pages, and pages nobody can be emailed about, are never deleted. The report lists them under "Waiting for an admin". Every deletion is logged on a page per month, `ContentExpiry.Log.<yyyy-MM>`, which only administrators can view.
 
+### Keep, My pages and the warning email
+
 **Keep** saves the page as a minor edit with the comment "Kept by Content Expiry", which restarts the clock and leaves a line in the page history. It records the person who clicked as the page's author and leaves the content author alone.
+
+**My pages**, at ContentExpiry.WebHome, lists the pages the signed-in user would be warned about: the ones they own, created or last edited, where they are the first person who can be emailed. Each has a Keep button. Pages that fall back to the fallback contact are only in the admin report.
+
+**The warning email** can be changed. The one that ships is replaced by every import, so in Content expiry open the Warning email section and use **Make my own copy to edit**. That copies it to `ContentExpiry.Code.MailTemplateCustom`, which imports never touch, and the engine uses the copy while it exists. Edit its Mail object (subject, plain text, HTML), check the result with **Send me a sample email**, and use **Go back to the shipped email** to drop your copy. The variables you can use are listed in that section.
+
+Before relying on it on a real wiki, work through [docs/acceptance-checklist.md](docs/acceptance-checklist.md).
+
+### The clock and what is covered
 
 The clock is the page's last-modified date, so any save restarts it. Nothing can expire until the longest warning period has passed after warnings are switched on, so every owner gets every warning even on the first run.
 
@@ -65,6 +76,8 @@ python3 tests/run_policy_tests.py # unit tests for the date logic (needs a JDK)
 tests/live/start-xwiki.sh         # throwaway XWiki 17.10 plus a mail capture server
 tests/live/run-all.sh             # builds, then runs the live tests against it
 ```
+
+Releases: push a tag matching the version in `src/package.json`, for example `v0.4.0`. The release workflow checks them, runs the unit tests, builds the XAR and publishes it with the matching `CHANGELOG.md` section as the notes.
 
 The live tests are described in [tests/live/README.md](tests/live/README.md).
 
@@ -107,4 +120,4 @@ Page sources are normal XWiki page XML with three shortcuts, so they stay short 
 
 ## Licence
 
-MIT. See [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE). `NOTICE` credits the XWiki class definitions embedded in the XAR.

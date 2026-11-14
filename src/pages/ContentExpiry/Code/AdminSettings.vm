@@ -37,6 +37,28 @@
   #end
 #end
 ##
+## ---- Warning email buttons ---------------------------------------------------------------
+#set ($ceTemplateMessage = '')
+#set ($ceTemplateOk = true)
+#set ($ceTemplateAction = "$!request.ceTemplateAction")
+#set ($ceTemplateActions = ['customize', 'reset', 'sample'])
+#if ($request.method == 'POST' && $ceTemplateActions.contains($ceTemplateAction))
+  #if (!$services.csrf.isTokenValid("$!request.form_token"))
+    #set ($ceTemplateMessage = 'Your session expired before the form was sent. Nothing was changed.')
+    #set ($ceTemplateOk = false)
+  #else
+    #if ($ceTemplateAction == 'customize')
+      #set ($ceTemplateResult = $ceEngine.customizeTemplate())
+    #elseif ($ceTemplateAction == 'reset')
+      #set ($ceTemplateResult = $ceEngine.resetTemplate())
+    #else
+      #set ($ceTemplateResult = $ceEngine.sendSample())
+    #end
+    #set ($ceTemplateMessage = $ceTemplateResult.message)
+    #set ($ceTemplateOk = $ceTemplateResult.ok)
+  #end
+#end
+##
 ## ---- Values to show: what was just submitted if it failed, otherwise what's saved -------
 #set ($s = $ceEngine.settings)
 #if ($ceSubmitted && !$ceSaved)
@@ -191,6 +213,26 @@
   #if ($s.active && "$!ceEngine.jobUser" != '')
     <p class="ce-hint">The daily job runs at 03:17 as $escapetool.xml($ceEngine.jobUser), the admin who last saved these settings. Check it under Administration, Scheduler if warnings stop.</p>
   #end
+  <h2 class="ce-heading">Warning email</h2>
+  #if ("$ceTemplateMessage" != '')
+    <div class="box #if ($ceTemplateOk)successmessage#{else}errormessage#end" role="status">$escapetool.xml($ceTemplateMessage)</div>
+  #end
+  #if ($ceEngine.templateCustomized)
+    <p>You are using your own copy of the email, so imports of a new version leave it alone.
+      <a href="$escapetool.xml($xwiki.getURL('ContentExpiry.Code.MailTemplateCustom', 'edit', 'editor=object'))">Edit it</a>: change the subject, the plain text and the HTML in its Mail object.</p>
+  #else
+    <p>The email is the one that ships with the extension. To change its wording, make your own copy first: an import of a new version replaces the shipped one, and would undo any edit made to it.</p>
+  #end
+  <p class="ce-hint">In the subject and body you can use <tt>$recipientName</tt>, <tt>$count</tt>, <tt>$wikiName</tt>, <tt>$wikiUrl</tt>, <tt>$myPagesUrl</tt>, <tt>$mode</tt> (report, warn or delete), <tt>$retentionMonths</tt>, and a list <tt>$items</tt> whose entries have <tt>title</tt>, <tt>url</tt>, <tt>lastModifiedText</tt>, <tt>expiryText</tt>, <tt>deleteOnText</tt>, <tt>daysLeft</tt>, <tt>threshold</tt> and <tt>contactSource</tt>.</p>
+  <form class="ce-inline-form" method="post" action="$escapetool.xml($doc.getURL('admin', 'editor=globaladmin&section=contentExpiry&forceEdit=1'))">
+    <input type="hidden" name="form_token" value="$escapetool.xml($services.csrf.token)" />
+    #if ($ceEngine.templateCustomized)
+      <button type="submit" name="ceTemplateAction" value="reset" class="button">Go back to the shipped email</button>
+    #else
+      <button type="submit" name="ceTemplateAction" value="customize" class="button">Make my own copy to edit</button>
+    #end
+    <button type="submit" name="ceTemplateAction" value="sample" class="button">Send me a sample email</button>
+  </form>
   <p class="ce-version">Content Expiry $escapetool.xml($ceEngine.version)</p>
 </div>
 {{/html}}

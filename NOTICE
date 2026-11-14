@@ -1,0 +1,16 @@
+Content Expiry for XWiki
+Copyright (c) 2026 Joe. Released under the MIT licence, see LICENSE.
+
+Third-party material
+
+The files in src/classdefs, and the copies of them that the build embeds in the XAR, are definitions
+of XWiki's own classes (XWiki.UIExtensionClass, XWiki.ConfigurableClass, XWiki.SchedulerJobClass,
+XWiki.Mail and others). They were extracted from XWiki 17.10 with tools/extract_classdef.py, with
+whitespace normalised. They have to be embedded: without them XWiki stores long text fields such as
+the Velocity code in the admin sections as short strings and the import fails. Every XWiki extension
+that uses these classes carries the same definitions.
+
+They remain the work of the XWiki contributors. XWiki states on https://www.xwiki.org/xwiki/bin/view/Main/License
+that its code is under the GNU LGPL 2.1 and that its default wiki documents are under Creative Commons
+Attribution (CC-BY), copyright "XWiki" (the XWiki open source project). Credit is given here for that
+reason. Nothing else in this repository is copied from XWiki.

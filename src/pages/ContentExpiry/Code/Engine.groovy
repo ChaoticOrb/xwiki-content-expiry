@@ -6,8 +6,8 @@
  * Velocity (and later from the scheduler job). parseGroovyFromPage only checks
  * that THIS page was saved by a user with programming rights, not who is
  * calling it, so every public method checks rights itself: wiki admin rights for everything
- * except bannerFor, pageInfo, keep and setOwner, which are for ordinary users and check that
- * user's own view or edit right on the page they are given.
+ * except bannerFor, pageInfo, myPages, keep and setOwner, which are for ordinary users and check that
+ * user's own view or edit right on the pages they are given.
  *
  * The Policy class at the bottom holds all the date arithmetic. It is written
  * in the subset of Groovy that is also valid Java, so tests/run_policy_tests.py
@@ -39,7 +39,7 @@ import org.xwiki.security.authorization.Right
 
 class ContentExpiryEngine
 {
-    static final String VERSION = '0.3.0'
+    static final String VERSION = '0.4.0'
 
     static final List<String> CODE_SPACE = ['ContentExpiry', 'Code']
 
@@ -68,6 +68,13 @@ class ContentExpiryEngine
 
     /** Pages deleted per run, unless the admin sets another limit. Limits the damage if something is wrong. */
     static final int DEFAULT_MAX_DELETIONS = 50
+
+    /**
+     * The warning email lives on MailTemplate, which every import overwrites. An admin who wants to
+     * change it makes a copy, MailTemplateCustom, which no import contains, and the engine uses that.
+     */
+    static final String TEMPLATE_PAGE = 'MailTemplate'
+    static final String CUSTOM_TEMPLATE_PAGE = 'MailTemplateCustom'
 
     /** Month pages of the audit log live here, for example ContentExpiry.Log.2026-11. */
     static final List<String> LOG_SPACE = ['ContentExpiry', 'Log']
@@ -510,6 +517,7 @@ class ContentExpiryEngine
         out.jobUser = getJobUser()
         out.jobUserAdmin = isJobUserAdmin()
         out.recycleBin = xc().getWiki().hasRecycleBin(xc())
+        out.templateCustomized = isTemplateCustomized()
         out.waiting = s.mode == 'delete' && s.active ? waitingForAdmin(50) : []
         out.covered = count(cov.where, cov.params)
         Map stale = filterClause('stale', p, s, now)
@@ -1251,9 +1259,10 @@ class ContentExpiryEngine
                 recipientName: person.name, items: person.items, count: person.items.size(),
                 mode: s.mode, retentionMonths: s.retentionMonths,
                 wikiName: wikiName(),
-                wikiUrl: xc.getWiki().getExternalURL('Main.WebHome', 'view', xc)
+                wikiUrl: xc.getWiki().getExternalURL('Main.WebHome', 'view', xc),
+                myPagesUrl: xc.getWiki().getExternalURL('ContentExpiry.WebHome', 'view', xc)
             ]
-            def message = mail.createMessage('template', codeRef('MailTemplate'), [language: 'en', velocityVariables: vars])
+            def message = mail.createMessage('template', templateRef(), [language: 'en', velocityVariables: vars])
             if (message == null) {
                 return [ok: false, error: 'the email template could not be loaded']
             }
@@ -1336,6 +1345,99 @@ class ContentExpiryEngine
     }
 
     // ------------------------------------------------------------------------------------------
+    // The warning email: customizing it, and a sample to look at
+    // ------------------------------------------------------------------------------------------
+
+    /** The template in use: the admin's copy if there is one, otherwise the one shipped in the XAR. */
+    private DocumentReference templateRef()
+    {
+        XWikiContext xc = xc()
+        DocumentReference custom = codeRef(CUSTOM_TEMPLATE_PAGE)
+        return xc.getWiki().exists(custom, xc) ? custom : codeRef(TEMPLATE_PAGE)
+    }
+
+    /** Whether the warning email is the admin's own copy. */
+    boolean isTemplateCustomized()
+    {
+        requireAdmin()
+        XWikiContext xc = xc()
+        return xc.getWiki().exists(codeRef(CUSTOM_TEMPLATE_PAGE), xc)
+    }
+
+    /**
+     * Copies the shipped email template to MailTemplateCustom so it can be edited. Imports leave
+     * the copy alone, so an upgrade does not undo the changes. Does nothing if the copy exists.
+     */
+    Map customizeTemplate()
+    {
+        requireAdmin()
+        XWikiContext xc = xc()
+        DocumentReference custom = codeRef(CUSTOM_TEMPLATE_PAGE)
+        if (xc.getWiki().exists(custom, xc)) {
+            return [ok: true, message: 'You are already using your own copy.']
+        }
+        if (!xc.getWiki().copyDocument(codeRef(TEMPLATE_PAGE), custom, xc)) {
+            return [ok: false, message: 'The template could not be copied.']
+        }
+        XWikiDocument doc = xc.getWiki().getDocument(custom, xc).clone()
+        doc.setTitle('Content Expiry warning email (your copy)')
+        doc.setHidden(true)
+        stamp(doc)
+        xc.getWiki().saveDocument(doc, 'Copied the shipped email template for editing', true, xc)
+        return [ok: true, message: 'Made your own copy. Edit its Mail object to change the email.']
+    }
+
+    /** Deletes the admin's copy, so the email goes back to the shipped template. It goes to the recycle bin. */
+    Map resetTemplate()
+    {
+        requireAdmin()
+        XWikiContext xc = xc()
+        DocumentReference custom = codeRef(CUSTOM_TEMPLATE_PAGE)
+        if (!xc.getWiki().exists(custom, xc)) {
+            return [ok: true, message: 'You were not using your own copy.']
+        }
+        xc.getWiki().deleteAllDocuments(xc.getWiki().getDocument(custom, xc), true, xc)
+        return [ok: true, message: 'Back to the shipped email. Your copy is in the recycle bin.']
+    }
+
+    /**
+     * Sends the admin a sample warning email, built with whichever template is in use and made-up
+     * pages, so a change to the template can be checked without waiting for a real warning.
+     * Goes to the address on the admin's own profile.
+     */
+    Map sendSample()
+    {
+        requireAdmin()
+        XWikiContext xc = xc()
+        Map s = readSettings()
+        if (!s.effectiveSender) {
+            return [ok: false, message: 'Set a sender address first: the settings have none and the wiki has no admin email.']
+        }
+        DocumentReference me = xc.getUserReference()
+        String problem = me == null ? 'not signed in' : userProblem(me)
+        if (problem != null) {
+            return [ok: false, message: "A sample goes to your own address, and your account can't be emailed: ${problem}.".toString()]
+        }
+        Map addresses = addressesFor(serializeLocal(me)).find { true } ?: [:]
+        Date now = new Date()
+        Map settingsForSample = s + [mode: s.mode == 'report' ? 'warn' : s.mode]
+        List<Map> items = [
+            [title: 'Sample page: Team handbook', daysLeft: 60, threshold: 60, catchUp: false, contactSource: 'owner'],
+            [title: 'Sample page: Meeting notes', daysLeft: 30, threshold: 30, catchUp: false, contactSource: 'creator'],
+            [title: 'Sample page: Old project plan', daysLeft: 7, threshold: 7, catchUp: false, contactSource: 'last editor']
+        ].collect { Map i ->
+            Date expiry = Policy.addDays(now, i.daysLeft)
+            i + [reference: 'Sample.Page', url: xc.getWiki().getExternalURL('ContentExpiry.WebHome', 'view', xc),
+                lastModified: now, lastModifiedText: mailDate(Policy.addMonths(now, -(s.retentionMonths - 2))),
+                expiry: expiry, expiryText: mailDate(expiry), deleteOnText: mailDate(expiry), expiryMillis: expiry.getTime()]
+        }
+        Map person = [email: addresses.email, name: addresses.name ?: 'there', items: items]
+        Map result = sendDigest(settingsForSample, person, now)
+        return result.ok ? [ok: true, message: "A sample email is on its way to ${addresses.email}.".toString()] :
+            [ok: false, message: "The sample could not be sent: ${result.error}".toString()]
+    }
+
+    // ------------------------------------------------------------------------------------------
     // For ordinary users: banner, Keep and owner. Each checks the user's own rights on the page.
     // ------------------------------------------------------------------------------------------
 
@@ -1386,6 +1488,60 @@ class ContentExpiryEngine
         }
         return [expiry: expiry, daysLeft: left, status: p.status(expiry, now), lastModified: doc.getDate(),
             retentionMonths: s.retentionMonths, canKeep: isSignedIn() && may(Right.EDIT, ref), mode: s.mode]
+    }
+
+    /**
+     * The pages the signed-in user would be warned about: inside their warning period or past expiry,
+     * where the user is the first person who can be emailed (owner, then creator, then last editor).
+     * Pages that fall back to the fallback contact are in the admin report instead. The user must be
+     * able to view a page for it to be listed. Looks at up to 500 candidate pages.
+     *
+     * @return [signedIn, active, pages: list, truncated], each page with title, url, expiry,
+     *         daysLeft, status, why (owner, creator or last editor) and canKeep
+     */
+    Map myPages(int limit)
+    {
+        Map out = [signedIn: isSignedIn(), active: false, pages: [], truncated: false]
+        if (!out.signedIn) {
+            return out
+        }
+        Map s = readSettings()
+        Date policyDate = readState().policyDate
+        out.active = s.active && policyDate != null
+        if (!out.active) {
+            return out
+        }
+        String me = serializeLocal(xc().getUserReference())
+        Date now = new Date()
+        Policy p = policy(s, policyDate)
+        Map clause = filterClause('due', p, s, now)
+        if (clause == null) {
+            return out
+        }
+        Map cov = coverage(s)
+        String mine = '(doc.creator = :ceMe or doc.author = :ceMe or exists (select ob.id from BaseObject ob, StringProperty pr ' +
+            'where ob.name = doc.fullName and ob.className = :ceOwnerClass and pr.id.id = ob.id and pr.id.name = \'owner\' and pr.value = :ceMe))'
+        Map params = cov.params + clause.params + [ceMe: me, ceOwnerClass: 'ContentExpiry.Code.OwnerClass']
+        Query q = hql(("select doc.fullName, doc.date from XWikiDocument doc where ${cov.where + clause.where} and ${mine} " +
+            'order by doc.date asc, doc.fullName asc').toString(), params)
+        q.setLimit(500)
+        List rows = q.execute()
+        out.truncated = rows.size() >= 500
+        int max = Math.max(1, Math.min(limit, 200))
+        for (Object[] r : rows) {
+            if (out.pages.size() >= max) {
+                out.truncated = true
+                break
+            }
+            Map row = row((String) r[0], (Date) r[1], p, s, now)
+            if (row.status == 'excluded' || row.hasChildren || row.contact != me || !may(Right.VIEW, resolve(row.fullName))) {
+                continue
+            }
+            out.pages << [fullName: row.fullName, title: row.title, url: row.url, expiry: row.expiry, daysLeft: row.daysLeft,
+                status: row.status, why: row.contactSource, lastModified: row.lastModified,
+                canKeep: may(Right.EDIT, resolve(row.fullName))]
+        }
+        return out
     }
 
     /**
