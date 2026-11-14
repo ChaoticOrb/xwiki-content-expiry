@@ -6,9 +6,12 @@ Third-party material
 The files in src/classdefs, and the copies of them that the build embeds in the XAR, are definitions
 of XWiki's own classes (XWiki.UIExtensionClass, XWiki.ConfigurableClass, XWiki.SchedulerJobClass,
 XWiki.Mail and others). They were extracted from XWiki 17.10 with tools/extract_classdef.py, with
-whitespace normalised. They have to be embedded: without them XWiki stores long text fields such as
-the Velocity code in the admin sections as short strings and the import fails. Every XWiki extension
-that uses these classes carries the same definitions.
+whitespace normalised. They are embedded because an XAR carries the class definition of every object
+in it, as XWiki's own exports do, so the import does not depend on what the target wiki has. A stub
+definition (property names without their types) made an import fail on 17.10 with "string data, right
+truncation; size limit: 768", because XWiki then stored long text properties as short strings. Leaving
+the definitions out altogether also imported cleanly on 17.10.14 (checked 14 Nov 2026), because that
+wiki already had XWiki's own classes.
 
 They remain the work of the XWiki contributors. XWiki states on https://www.xwiki.org/xwiki/bin/view/Main/License
 that its code is under the GNU LGPL 2.1 and that its default wiki documents are under Creative Commons

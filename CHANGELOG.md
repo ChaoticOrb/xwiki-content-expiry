@@ -10,7 +10,7 @@ My pages, an email template that survives upgrades, and a release workflow.
 - New variable `$myPagesUrl` in the email template. The template page documents all the variables.
 - Release workflow: pushing a tag such as `v0.4.0` runs the unit tests, builds the XAR and publishes a GitHub release with this changelog section as the notes. Not yet used.
 - `docs/acceptance-checklist.md`: what to check on a real instance, in order.
-- `NOTICE` credits the XWiki class definitions that are embedded in the XAR. They have to be embedded: an import without them fails because XWiki stores long text fields as short strings.
+- `NOTICE` credits the XWiki class definitions that are embedded in the XAR. They are XWiki's own, extracted from 17.10.
 - Fixed in tests: the lock XWiki puts on the global admin page by an earlier admin session is now released.
 
 ## 0.3.0 (unreleased)
