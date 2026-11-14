@@ -1,10 +1,23 @@
 name: Release
 
-# Push a tag such as v0.4.0 (matching "version" in src/package.json) to build the XAR
-# and publish it as a GitHub release, with the matching CHANGELOG section as the notes.
+# Two ways to release. Both publish the same thing.
+#
+#   1. On GitHub: Actions, Release, Run workflow, from the main branch, and type the version, for
+#      example 0.4.0. The workflow creates the tag v0.4.0 on the commit it runs from.
+#   2. From a terminal: push a tag such as v0.4.0.
+#
+# Either way the version must match "version" in src/package.json and CHANGELOG.md must have a
+# section for it. The workflow runs the unit tests, builds the XAR and publishes it as a GitHub
+# release, with that CHANGELOG section as the notes.
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, as in src/package.json, for example 0.4.0"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -14,6 +27,51 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Work out the tag
+        id: tag
+        # The typed version goes in through the environment, never into the script text.
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            if [ "$REF" != "refs/heads/main" ]; then
+              echo "Run this from the main branch, not from $REF." >&2
+              exit 1
+            fi
+            version="${INPUT_VERSION#v}"
+            tag="v$version"
+          else
+            tag="$REF_NAME"
+          fi
+          if ! printf '%s' "$tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
+            echo "The version must look like 1.2.3 (or v1.2.3), and the tag must look like v1.2.3. Got: $tag" >&2
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Stop if this version was already released
+        env:
+          EVENT: ${{ github.event_name }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "There is already a release for $TAG." >&2
+            exit 1
+          fi
+          # A button run creates the tag itself, so it must not exist yet. Otherwise the release
+          # would attach to an older commit than the one this run builds.
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            if [ -n "$(git ls-remote --tags origin "refs/tags/$TAG")" ]; then
+              echo "The tag $TAG already exists. Delete it, or release from a terminal by pushing it." >&2
+              exit 1
+            fi
+          fi
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -21,15 +79,26 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
+
       - name: Check the tag matches the package version
-        run: python3 tools/release_notes.py --check "$GITHUB_REF_NAME"
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: python3 tools/release_notes.py --check "$TAG"
+
       - name: Policy tests
         run: python3 tests/run_policy_tests.py
+
       - name: Build XAR
         run: python3 build.py
+
       - name: Write release notes from the changelog
-        run: python3 tools/release_notes.py "$GITHUB_REF_NAME" > release-notes.md
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: python3 tools/release_notes.py "$TAG" > release-notes.md
+
       - name: Publish release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release create "$GITHUB_REF_NAME" dist/*.xar --title "Content Expiry ${GITHUB_REF_NAME#v}" --notes-file release-notes.md
+          TAG: ${{ steps.tag.outputs.tag }}
+        # --target only matters when the tag does not exist yet, which is the button run.
+        run: gh release create "$TAG" dist/*.xar --target "$GITHUB_SHA" --title "Content Expiry ${TAG#v}" --notes-file release-notes.md

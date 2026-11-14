@@ -77,7 +77,7 @@ tests/live/start-xwiki.sh         # throwaway XWiki 17.10 plus a mail capture se
 tests/live/run-all.sh             # builds, then runs the live tests against it
 ```
 
-Releases: push a tag matching the version in `src/package.json`, for example `v0.4.0`. The release workflow checks them, runs the unit tests, builds the XAR and publishes it with the matching `CHANGELOG.md` section as the notes.
+Releases: put the new version in `src/package.json` and a section for it in `CHANGELOG.md`, and merge that to `main`. Then either open Actions, Release, Run workflow on GitHub, choose `main` and type the version (for example `0.4.0`), or push a tag such as `v0.4.0` from a terminal. Both run the same workflow: it checks the version against `package.json`, runs the unit tests, builds the XAR and publishes it as a GitHub release with the matching `CHANGELOG.md` section as the notes. The button creates the tag itself, and refuses to run from any branch but `main` or for a version that already has a release or a tag.
 
 The live tests are described in [tests/live/README.md](tests/live/README.md).
 
