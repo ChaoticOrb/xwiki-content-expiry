@@ -33,9 +33,12 @@ async function takeOverAdminLock(page) {
 // while an admin has the section open, and shows "locked by ..." to the next admin. That is standard for every
 // configurable section. Headless browsers don't release it on close, so tests release it with the cancel action.
 async function releaseAdminLock() {
-  // cancel only removes the caller's own lock, so cancel as every admin the tests use.
+  // cancel only removes the caller's own lock, so cancel as every admin the tests use. Two pages can hold a lock:
+  // the one that registers our section, and the global admin page that sections like Import use.
   for (const u of [ADMIN, { user: 'joe', pass: 'joepass1' }]) {
-    await fetch(`${BASE}/bin/cancel/ContentExpiry/Code/Admin`, { headers: { Authorization: auth(u) }, redirect: 'manual' }).catch(() => {});
+    for (const page of ['ContentExpiry/Code/Admin', 'XWiki/XWikiPreferences']) {
+      await fetch(`${BASE}/bin/cancel/${page}`, { headers: { Authorization: auth(u) }, redirect: 'manual' }).catch(() => {});
+    }
   }
 }
 

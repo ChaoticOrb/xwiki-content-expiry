@@ -1,6 +1,6 @@
 # Content Expiry: design spec
 
-**Status:** v0.4 of the spec, 11 Nov 2026. Versions 0.1 (report only), 0.2 (warn only) and 0.3 (warn and delete) of the extension are built and tested on XWiki 17.10.14 with `tests/live`. 0.2 has also run on a real homelab instance. 0.3 has not been run on one.
+**Status:** v0.5 of the spec, 14 Nov 2026. Versions 0.1 to 0.4 of the extension are built and tested on XWiki 17.10.14 with `tests/live`. 0.3 is installed on a real homelab instance; warn mode and mail work there. Delete mode has not been run on a real wiki.
 
 Pages that haven't been touched for a configurable period (default 5 years) are flagged, their owner is warned ahead of time, and if nobody keeps them they go to the XWiki recycle bin. Admins configure it from the normal Administration screen. Everyone else only sees warnings and a Keep button.
 
@@ -104,7 +104,7 @@ Go-live is meant to be: install, look at the report for a few weeks, adjust excl
 
 - The banner and Keep button (0.2, built).
 - An **Expiry** tab under the page (0.2, built) with an Owner field for people who can edit the page, showing when the page expires and, to editors only, who would be warned. The first design put the field in the Information tab, but that tab is built into the skin and can't be extended, so this is its own tab, registered on `org.xwiki.plaftorm.template.docextra` (the misspelling is XWiki's). The owner form posts to the page and is handled by the banner extension, because a tab's content is only rendered when the tab loads.
-- A "My pages due for review" page listing pages the current user would be warned about (0.4).
+- **My pages** (0.4, built): `ContentExpiry.WebHome` lists, for the signed-in user, the pages inside their warning period or past expiry whose first emailable contact (owner, creator, last editor, the same order as the emails) is that user, with the reason and a Keep button each. The candidate query narrows on `doc.creator`, `doc.author` and the owner object, which XWiki stores as plain references such as `XWiki.alice`, then the engine applies the exact contact rule per page. Pages that fall back to the fallback contact are not listed; admins see them in the report. Keep from the list uses its own form action, `ceMyAction`, so it cannot collide with the banner's Keep handler that runs on every page view.
 
 ## 5. Architecture
 
@@ -130,6 +130,7 @@ Wiki pages only (XAR). The engine is one Groovy class on `ContentExpiry.Code.Eng
 | `ContentExpiry.Code.OwnerClass` | `owner` (user), added to a page by the Expiry tab | Yes |
 | `ContentExpiry.Code.Job` | Scheduler job | Yes |
 | `ContentExpiry.Code.MailTemplate` | `XWiki.Mail` object for the digest | Yes |
+| `ContentExpiry.Code.MailTemplateCustom` | The admin's copy of the email, used instead of `MailTemplate` while it exists | **No**, made by the "Make my own copy" button, so imports never overwrite it |
 | `ContentExpiry.Code.PageUI` | UI extensions (banner, Expiry tab) and their stylesheet | Yes |
 | `ContentExpiry.Log.<yyyy-MM>` | Audit log, one page per month, admin view only | **No**, created on the first deletion |
 
@@ -142,7 +143,8 @@ Email uses the Mail Sender API (`mail.sender` script service, loaded from the en
 | 0.1 | Settings, report, safety floor (report only). Built, tested |
 | 0.2 | Owner field, scheduler job, digest emails, banner and Keep button, Warn-only mode. Built, tested |
 | 0.3 | Deletion to recycle bin, audit log, children list for admins, Warn-and-delete mode. Built, tested on a throwaway instance |
-| 0.4 | "My pages" view, editable email template, acceptance tests on a live instance, first release |
+| 0.4 | "My pages" view, editable email template that survives upgrades, acceptance checklist, release workflow. Built, tested |
+| Next | First release (tag and GitHub release), a decision on the licence, and whether to package it for extensions.xwiki.org (see section 9) |
 
 ## 8. Open questions
 
@@ -158,9 +160,24 @@ Email uses the Mail Sender API (`mail.sender` script service, loaded from the en
 10. Whether the real SMTP server at work needs authentication or TLS. The tests use a plain local capture server.
 11. XWiki's ConfigurableClass framework locks the section's registration page while an admin has it open, and a second admin sees "locked by". That is standard for every configurable section, not something this extension adds.
 
+## 9. Licence and publishing as an XWiki extension
+
+Researched 14 Nov 2026 from XWiki's own pages. Not legal advice.
+
+**What XWiki says about licences.** [The XWiki licence page](https://www.xwiki.org/xwiki/bin/view/Main/License): XWiki's code is LGPL 2.1, and "External programs that talk to the wiki through other means don't have to be LGPL, any license is acceptable. This includes custom components, plugins or authenticators included in the platform." Its default wiki documents (the default XAR) are CC-BY, "any new content can have any other license", and copyright is held by the contributors, with no CLA.
+
+**What XWiki Contrib does.** [The Contrib documentation](https://contrib.xwiki.org/xwiki/bin/view/Main/) does not state a required licence in the pages I read. Its README template has a line "License: taken from the pom.xml, e.g. LGPL 2.1", and the [GitHub template repository](https://github.com/xwiki-contrib/github-template-repository) ships an LGPL 2.1 `LICENSE` and a README saying "License: LGPL 2.1". So LGPL 2.1 is the convention, and I found no rule that makes it mandatory.
+
+**What is in this repository.** The code is ours and MIT. `src/classdefs` holds XWiki's own class definitions (CC-BY documents of the default XAR), which `NOTICE` credits. They cannot be dropped from the XAR: an import with stub class definitions failed on three pages with "string data, right truncation; size limit: 768", because without the definition XWiki stores long text properties as short strings. Every XWiki extension embeds the same definitions.
+
+**Publishing.** On extensions.xwiki.org an extension is released from a Maven build to XWiki's Maven repository first (contrib projects use the groupId `org.xwiki.contrib`), then imported by its id `<groupId>:<artifactId>` so it can be installed from the Extension Manager. Their application design guidelines also ask for a dedicated space (we have `ContentExpiry`), hidden technical pages (we have), and an Application Panel entry through a UI extension (we have none). Ours is built with Python and carries `com.github.chaoticorb:xwiki-content-expiry` in `package.xml`, so it cannot be installed that way today. Doing it would mean a Maven build around the same pages and an agreement on the groupId.
+
+**Not established.** I tried to tally the licences of published extensions through the extensions.xwiki.org REST API. The details endpoint returned a server error for curl and was blocked for the default Python client, so I have no count.
+
 ## Sources
 
 - [XWiki forum: The lifetime of the page](https://forum.xwiki.org/t/the-lifetime-of-the-page/3737)
+- [XWiki licence](https://www.xwiki.org/xwiki/bin/view/Main/License), [XWiki Contrib](https://contrib.xwiki.org/xwiki/bin/view/Main/)
 - [Scheduler Application](https://extensions.xwiki.org/xwiki/bin/view/Extension/Scheduler+Application)
 - [Mail Sender API](https://extensions.xwiki.org/xwiki/bin/view/Extension/Mail/MailSenderAPI)
 - [XWIKI-19765](https://jira.xwiki.org/browse/XWIKI-19765), [XWIKI-21673](https://jira.xwiki.org/browse/XWIKI-21673)

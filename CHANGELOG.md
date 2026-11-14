@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.0 (unreleased)
+
+My pages, an email template that survives upgrades, and a release workflow.
+
+- **My pages.** ContentExpiry.WebHome lists the pages the signed-in user would be warned about (owner, then creator, then last editor), with the reason and a Keep button for each. Emails and the Expiry tab link to it. Pages that fall back to the fallback contact are in the admin report instead.
+- **Customizable warning email.** The shipped template is replaced by every import, so edits to it were lost on upgrade. "Make my own copy to edit" in the settings copies it to `ContentExpiry.Code.MailTemplateCustom`, which no import contains, and the engine uses that copy while it exists. "Go back to the shipped email" deletes the copy (to the recycle bin). Works for an admin without programming rights.
+- **Send me a sample email** in the settings builds the email with made-up pages and sends it to the admin's own address, using whichever template is in use.
+- New variable `$myPagesUrl` in the email template. The template page documents all the variables.
+- Release workflow: pushing a tag such as `v0.4.0` runs the unit tests, builds the XAR and publishes a GitHub release with this changelog section as the notes. Not yet used.
+- `docs/acceptance-checklist.md`: what to check on a real instance, in order.
+- `NOTICE` credits the XWiki class definitions that are embedded in the XAR. They have to be embedded: an import without them fails because XWiki stores long text fields as short strings.
+- Fixed in tests: the lock XWiki puts on the global admin page by an earlier admin session is now released.
+
 ## 0.3.0 (unreleased)
 
 Warn and delete. Pages nobody keeps go to the recycle bin.

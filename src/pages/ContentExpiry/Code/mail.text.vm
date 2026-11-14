@@ -14,4 +14,4 @@ On the date shown each page is moved to the recycle bin, where a wiki administra
 This wiki is set to warn only, so nothing is deleted automatically at the moment.
 #end
 
-To keep a page, open it and click "Keep this page", or edit and save it. Either restarts the clock for $retentionMonths months. You are getting this email because you are the page's owner, creator or last editor, or the wiki's fallback contact.
+To keep a page, open it and click "Keep this page", or edit and save it. Either restarts the clock for $retentionMonths months. All the pages waiting for you are listed at $myPagesUrl You are getting this email because you are the page's owner, creator or last editor, or the wiki's fallback contact.

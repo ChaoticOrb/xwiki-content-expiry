@@ -1,0 +1,35 @@
+name: Release
+
+# Push a tag such as v0.4.0 (matching "version" in src/package.json) to build the XAR
+# and publish it as a GitHub release, with the matching CHANGELOG section as the notes.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Check the tag matches the package version
+        run: python3 tools/release_notes.py --check "$GITHUB_REF_NAME"
+      - name: Policy tests
+        run: python3 tests/run_policy_tests.py
+      - name: Build XAR
+        run: python3 build.py
+      - name: Write release notes from the changelog
+        run: python3 tools/release_notes.py "$GITHUB_REF_NAME" > release-notes.md
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "$GITHUB_REF_NAME" dist/*.xar --title "Content Expiry ${GITHUB_REF_NAME#v}" --notes-file release-notes.md

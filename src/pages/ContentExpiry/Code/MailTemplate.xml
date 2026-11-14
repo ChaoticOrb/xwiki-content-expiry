@@ -2,6 +2,9 @@
 <!-- Digest email, one per person per run. Velocity variables are listed in docs/design.md. -->
 <xwikidoc reference="ContentExpiry.Code.MailTemplate">
   <title>Content Expiry warning email</title>
+  <content>This is the warning email that ships with the extension. Do not edit it here: every import of a new version replaces this page. Make your own copy from Administration, Content expiry, Warning email, and edit that.
+
+Variables for the subject and the body: ##$recipientName##, ##$count##, ##$wikiName##, ##$wikiUrl##, ##$myPagesUrl##, ##$mode## (warn or delete), ##$retentionMonths## and the list ##$items##. Each item has ##title##, ##url##, ##lastModifiedText##, ##expiryText##, ##deleteOnText##, ##daysLeft##, ##threshold## and ##contactSource##.</content>
   <object>
     <className>XWiki.Mail</className>
     <property><language>en</language></property>

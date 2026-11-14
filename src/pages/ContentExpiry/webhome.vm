@@ -1,0 +1,76 @@
+{{velocity}}
+## My pages: what an ordinary signed-in user is being warned about, with a Keep button for each.
+## Admins also get links to the settings and the report.
+#set ($ceEngine = $xwiki.parseGroovyFromPage('ContentExpiry.Code.Engine'))
+#if ("$!ceEngine.ping()" != 'ok')
+{{error}}Content Expiry can't start. Ask a wiki administrator to open the page ContentExpiry.Code.Engine, click Edit and save it.{{/error}}
+#else
+#set ($discard = $xwiki.ssx.use('ContentExpiry.Code.PageUI'))
+#set ($ceMessage = '')
+#set ($ceMessageClass = 'successmessage')
+#if ($request.method == 'POST' && "$!request.ceMyAction" == 'keep')
+  #if (!$services.csrf.isTokenValid("$!request.form_token"))
+    #set ($ceMessage = 'Your session expired before the form was sent. Nothing was changed.')
+    #set ($ceMessageClass = 'errormessage')
+  #else
+    #set ($ceKeepRef = $services.model.resolveDocument("$!request.ceRef"))
+    #set ($ceKeepResult = $ceEngine.keep($ceKeepRef))
+    #if ($ceKeepResult.ok)
+      #set ($ceMessage = 'Kept. The page was saved without changes and its expiry clock has restarted.')
+    #else
+      #set ($ceMessage = $ceKeepResult.error)
+      #set ($ceMessageClass = 'errormessage')
+    #end
+  #end
+#end
+#set ($ceMine = $ceEngine.myPages(100))
+{{html clean="false"}}
+<div class="ce-mypages">
+  #if ("$ceMessage" != '')
+    <div class="box $ceMessageClass" role="status">$escapetool.xml($ceMessage)</div>
+  #end
+  <p>Pages that nobody has changed for a long time expire. This is the list of pages you would be warned about by email, because you own them, created them or last edited them. <strong>Keep</strong> saves a page without changing it and restarts its clock. Editing a page does the same.</p>
+  #if (!$ceMine.signedIn)
+    <p>Sign in to see your pages.</p>
+  #elseif (!$ceMine.active)
+    <p>Content expiry is not warning anyone on this wiki yet, so nothing is waiting for you.</p>
+  #elseif ($ceMine.pages.isEmpty())
+    <p><strong>Nothing is waiting for you.</strong></p>
+  #else
+    <table class="ce-table">
+      <thead>
+        <tr><th scope="col">Page</th><th scope="col">Last changed</th><th scope="col">Expires</th><th scope="col">Why it is yours</th><th scope="col"></th></tr>
+      </thead>
+      <tbody>
+      #foreach ($page in $ceMine.pages)
+        <tr class="ce-row-$escapetool.xml($page.status)">
+          <td><a href="$escapetool.xml($page.url)">$escapetool.xml($page.title)</a><span class="ce-ref">$escapetool.xml($page.fullName)</span></td>
+          <td>$escapetool.xml($xwiki.formatDate($page.lastModified, 'd MMM yyyy'))</td>
+          <td>$escapetool.xml($xwiki.formatDate($page.expiry, 'd MMM yyyy'))#if ($page.daysLeft > 0)<span class="ce-ref">in $page.daysLeft days</span>#else<span class="ce-ref">expired</span>#end</td>
+          <td>#if ($page.why == 'owner')You are its owner#elseif ($page.why == 'creator')You created it#else You last edited it#end</td>
+          <td>
+            #if ($page.canKeep)
+            <form method="post" action="$escapetool.xml($doc.getURL('view'))">
+              <input type="hidden" name="ceMyAction" value="keep" />
+              <input type="hidden" name="ceRef" value="$escapetool.xml($page.fullName)" />
+              <input type="hidden" name="form_token" value="$escapetool.xml($services.csrf.token)" />
+              <button type="submit" class="btn btn-primary">Keep</button>
+            </form>
+            #else
+              <span class="ce-ref">You can't edit it</span>
+            #end
+          </td>
+        </tr>
+      #end
+      </tbody>
+    </table>
+    #if ($ceMine.truncated)<p class="ce-hint">Only the first pages are shown.</p>#end
+  #end
+  #if ($hasAdmin)
+    <p class="ce-admin-links">Administrators: <a href="$escapetool.xml($xwiki.getURL('XWiki.XWikiPreferences', 'admin', 'editor=globaladmin&section=contentExpiry'))">settings</a>
+      and <a href="$escapetool.xml($xwiki.getURL('XWiki.XWikiPreferences', 'admin', 'editor=globaladmin&section=contentExpiryReport'))">report</a>.</p>
+  #end
+</div>
+{{/html}}
+#end
+{{/velocity}}
