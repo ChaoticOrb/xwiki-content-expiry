@@ -1,0 +1,44 @@
+{{velocity}}
+## The Expiry tab under a page: when it expires and who is warned, and the owner field.
+#set ($ceEngine = $xwiki.parseGroovyFromPage('ContentExpiry.Code.Engine'))
+#if ("$!ceEngine.ping()" == 'ok')
+#set ($ceInfo = $ceEngine.pageInfo($doc.documentReference))
+#if ($ceInfo)
+#set ($discard = $xwiki.ssx.use('ContentExpiry.Code.PageUI'))
+{{html clean="false"}}
+<div class="ce-tab">
+  #if (!$ceInfo.active)
+    <p>Content expiry is not warning anyone on this wiki at the moment, so nothing will be emailed or deleted.</p>
+  #end
+  #if (!$ceInfo.covered)
+    <p>This page is not covered by content expiry. It may be a system or application page, hidden, exempt, or in an excluded space.</p>
+  #else
+    <p>Last changed $escapetool.xml($xwiki.formatDate($ceInfo.lastModified, 'd MMMM yyyy')).
+    #if ($ceInfo.hasChildren)
+      It has child pages, so an administrator decides what happens to it instead of it being deleted automatically.
+    #elseif ($ceInfo.active)
+      It expires on <strong>$escapetool.xml($xwiki.formatDate($ceInfo.expiry, 'd MMMM yyyy'))</strong>#if ($ceInfo.daysLeft > 0) (in $ceInfo.daysLeft days)#end.
+    #else
+      If content expiry were on, it would expire on <strong>$escapetool.xml($xwiki.formatDate($ceInfo.expiry, 'd MMMM yyyy'))</strong>.
+    #end
+    </p>
+    #if ("$!ceInfo.contact" != '')
+      <p>Warnings for this page go to <strong>$escapetool.xml($ceInfo.contact)</strong>
+      (#if ($ceInfo.contactSource == 'fallback')the fallback contact#{else}the page's $escapetool.xml($ceInfo.contactSource)#end).</p>
+    #end
+  #end
+  #if ($ceInfo.canEdit)
+  <form class="xform ce-owner-form" method="post" action="$escapetool.xml($doc.getURL('view'))#org.xwiki.contentexpiry.tab">
+    <input type="hidden" name="ceAction" value="setOwner" />
+    <input type="hidden" name="form_token" value="$escapetool.xml($services.csrf.token)" />
+    <label for="ceOwner">Owner</label>
+    <span class="xHint">A wiki user, for example <tt>XWiki.jsmith</tt>. Warnings go to the owner first, then the page's creator, then its last editor. Leave empty for no owner. Saving counts as an edit, so it restarts this page's expiry clock.</span>
+    <input type="text" id="ceOwner" name="ceOwner" value="$escapetool.xml($ceInfo.owner)" />
+    <input type="submit" class="button" value="Save owner" />
+  </form>
+  #end
+</div>
+{{/html}}
+#end
+#end
+{{/velocity}}

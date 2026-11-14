@@ -1,0 +1,28 @@
+<?xml version="1.1" encoding="UTF-8"?>
+<!-- Optional per-page owner: who is warned first. Added to a page by the Expiry tab. -->
+<xwikidoc reference="ContentExpiry.Code.OwnerClass">
+  <title>Content Expiry owner class</title>
+  <class>
+    <name>ContentExpiry.Code.OwnerClass</name>
+    <customClass/>
+    <customMapping/>
+    <defaultViewSheet/>
+    <defaultEditSheet/>
+    <defaultWeb/>
+    <nameField/>
+    <validationScript/>
+    <owner>
+      <customDisplay/>
+      <disabled>0</disabled>
+      <displayType>input</displayType>
+      <multiSelect>0</multiSelect>
+      <name>owner</name>
+      <number>1</number>
+      <prettyName>Owner</prettyName>
+      <size>1</size>
+      <unmodifiable>0</unmodifiable>
+      <usesList>0</usesList>
+      <classType>com.xpn.xwiki.objects.classes.UsersClass</classType>
+    </owner>
+  </class>
+</xwikidoc>

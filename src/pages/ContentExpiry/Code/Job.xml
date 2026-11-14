@@ -1,0 +1,18 @@
+<?xml version="1.1" encoding="UTF-8"?>
+<!-- Daily run. The scheduler runs it as the user in contextUser, which the engine
+     sets to the admin who last saved the settings. XWiki.Admin below is only a placeholder. -->
+<xwikidoc reference="ContentExpiry.Code.Job">
+  <title>Content Expiry daily run</title>
+  <object>
+    <className>XWiki.SchedulerJobClass</className>
+    <property><jobName>Content Expiry daily run</jobName></property>
+    <property><jobDescription>Warns the owners of pages that are close to their expiry date. Does nothing unless Content Expiry is switched on in warn mode.</jobDescription></property>
+    <property><jobClass>com.xpn.xwiki.plugin.scheduler.GroovyJob</jobClass></property>
+    <property><status>Normal</status></property>
+    <property><cron>0 17 3 * * ?</cron></property>
+    <property><contextUser>XWiki.Admin</contextUser></property>
+    <property><contextLang>en</contextLang></property>
+    <property><contextDatabase>xwiki</contextDatabase></property>
+    <property><script file="job.groovy"/></property>
+  </object>
+</xwikidoc>

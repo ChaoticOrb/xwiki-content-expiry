@@ -1,0 +1,35 @@
+<?xml version="1.1" encoding="UTF-8"?>
+<!-- What ordinary users see: the banner and Keep button under the page title, and the Expiry tab
+     (owner field) under the page. Both are UI extensions, so they need this page saved by a user
+     with programming rights. -->
+<xwikidoc reference="ContentExpiry.Code.PageUI">
+  <title>Content Expiry page UI</title>
+  <object>
+    <className>XWiki.UIExtensionClass</className>
+    <property><extensionPointId>org.xwiki.platform.template.content.header.after</extensionPointId></property>
+    <property><name>org.xwiki.contentexpiry.actions</name></property>
+    <property><content file="pageactions.vm"/></property>
+    <property><parameters/></property>
+    <property><scope>wiki</scope></property>
+  </object>
+  <object>
+    <className>XWiki.UIExtensionClass</className>
+    <property><extensionPointId>org.xwiki.plaftorm.template.docextra</extensionPointId></property>
+    <property><name>org.xwiki.contentexpiry.tab</name></property>
+    <property><content file="tab.vm"/></property>
+    <property><parameters>show=true
+name=contentexpiry
+title=Expiry
+order=900</parameters></property>
+    <property><scope>wiki</scope></property>
+  </object>
+  <object>
+    <className>XWiki.StyleSheetExtension</className>
+    <property><cache>long</cache></property>
+    <property><code file="pageui.css"/></property>
+    <property><contentType>CSS</contentType></property>
+    <property><name>Content Expiry page UI</name></property>
+    <property><parse>0</parse></property>
+    <property><use>onDemand</use></property>
+  </object>
+</xwikidoc>

@@ -24,6 +24,15 @@ public class PolicyTest
         cutoffIsNullWhileFloorIsAhead();
         daysLeftRoundsUp();
         statusBands();
+        crossedFindsEachThresholdOnce();
+        crossedStartsAtPolicyDate();
+        crossedFollowsAPageThatMoves();
+        ledgerRoundTrips();
+        ledgerMergeKeepsTheMostUrgentWarning();
+        deletionNeedsTheFinalWarningFirst();
+        deletionWaitsAfterALateWarning();
+        aKeptPageIsNeverDeletable();
+        finalWindowStartsAtTheShortestWarning();
 
         System.out.println(passes + " passed, " + failures + " failed");
         System.exit(failures == 0 ? 0 : 1);
@@ -148,5 +157,133 @@ public class PolicyTest
         check("within 60 days", "warning", p.status(Policy.addDays(now, 8), now));
         check("edge of 60 days", "warning", p.status(Policy.addDays(now, 60), now));
         check("beyond 60 days", "ok", p.status(Policy.addDays(now, 61), now));
+    }
+
+    static void crossedFindsEachThresholdOnce()
+    {
+        Policy p = new Policy(60, days(60, 30, 7), null);
+        Date expiry = at(2027, 1, 1);
+        // Thresholds fall on 2 Nov, 2 Dec and 25 Dec 2026.
+        check("nothing before the first", 0, p.crossed(expiry, at(2026, 10, 1), at(2026, 11, 1)).size());
+        check("first threshold", days(60), p.crossed(expiry, at(2026, 11, 1), at(2026, 11, 3)));
+        check("window start is exclusive", 0, p.crossed(expiry, at(2026, 11, 2), at(2026, 11, 3)).size());
+        check("window end is inclusive", days(30), p.crossed(expiry, at(2026, 12, 1), at(2026, 12, 2)));
+        check("missed days catch up", days(30, 7), p.crossed(expiry, at(2026, 12, 1), at(2026, 12, 31)));
+        check("all three in one long gap", days(60, 30, 7), p.crossed(expiry, at(2026, 10, 1), at(2027, 1, 5)));
+        // Consecutive daily windows never repeat or skip a threshold.
+        int total = 0;
+        Date from = at(2026, 10, 1);
+        for (int i = 1; i <= 120; i++) {
+            Date to = Policy.addDays(from, 1);
+            total += p.crossed(expiry, from, to).size();
+            from = to;
+        }
+        check("daily windows see each threshold once", 3, total);
+    }
+
+    static void crossedStartsAtPolicyDate()
+    {
+        // Floor-bound pages expire exactly policy date + longest warning, so the first warning
+        // is due at the policy date itself. The engine starts the first window one second early.
+        Date policy = at(2026, 11, 9, 9, 0);
+        Policy p = new Policy(60, days(60, 30, 7), policy);
+        Date expiry = p.expiry(at(2019, 1, 1), policy);
+        Date oneSecondBefore = new Date(policy.getTime() - 1000L);
+        check("first warning at policy date", days(60), p.crossed(expiry, oneSecondBefore, policy));
+        check("missed without the extra second", 0, p.crossed(expiry, policy, Policy.addDays(policy, 1)).size());
+    }
+
+    static void crossedFollowsAPageThatMoves()
+    {
+        Policy p = new Policy(60, days(60, 30, 7), null);
+        Date now = at(2026, 11, 9);
+        // A page edited today expires in 60 months, far outside every warning.
+        Date expiry = p.expiry(now, now);
+        check("freshly edited page has nothing to warn", 0, p.crossed(expiry, at(2026, 11, 1), now).size());
+    }
+
+    static void ledgerRoundTrips()
+    {
+        java.util.Map<String, long[]> m = new java.util.TreeMap<String, long[]>();
+        m.put("Space.A.WebHome", new long[] {1000L, 2000L, 7L});
+        m.put("Space.B.WebHome", new long[] {3000L, 4000L, 30L});
+        String text = Policy.formatLedger(m);
+        java.util.Map<String, long[]> back = Policy.parseLedger(text);
+        check("two entries survive", 2, back.size());
+        check("expiry survives", 1000L, back.get("Space.A.WebHome")[0]);
+        check("delivered at survives", 4000L, back.get("Space.B.WebHome")[1]);
+        check("threshold survives", 30L, back.get("Space.B.WebHome")[2]);
+        check("empty text", 0, Policy.parseLedger("").size());
+        check("null text", 0, Policy.parseLedger(null).size());
+        check("damaged lines are ignored", 1, Policy.parseLedger("junk\nA|1|2|x\nB|1|2|3\nC|1|2").size());
+    }
+
+    static void ledgerMergeKeepsTheMostUrgentWarning()
+    {
+        long[] first = Policy.mergeLedger(null, 100L, 10L, 60);
+        check("first warning creates the entry", 60L, first[2]);
+        long[] sameThreshold = Policy.mergeLedger(first, 100L, 20L, 60);
+        check("same warning again changes nothing", 10L, sameThreshold[1]);
+        long[] closer = Policy.mergeLedger(first, 100L, 30L, 7);
+        check("a closer threshold replaces it", 7L, closer[2]);
+        check("and takes the new delivery time", 30L, closer[1]);
+        long[] farther = Policy.mergeLedger(closer, 100L, 40L, 30);
+        check("a farther threshold does not undo it", 7L, farther[2]);
+        long[] moved = Policy.mergeLedger(closer, 200L, 50L, 60);
+        check("a new expiry date starts again", 200L, moved[0]);
+        check("with that warning", 60L, moved[2]);
+    }
+
+    static void deletionNeedsTheFinalWarningFirst()
+    {
+        Policy p = new Policy(60, days(60, 30, 7), at(2026, 11, 10));
+        Date expiry = at(2027, 1, 9);
+        long[] sevenDay = new long[] {expiry.getTime(), at(2027, 1, 2).getTime(), 7L};
+        long[] thirtyDay = new long[] {expiry.getTime(), at(2026, 12, 10).getTime(), 30L};
+        check("no entry, no deletion", false, p.mayDelete(null, expiry, at(2027, 3, 1)));
+        check("only the 30 day warning, no deletion", false, p.mayDelete(thirtyDay, expiry, at(2027, 3, 1)));
+        check("final warning delivered, expiry not reached", false, p.mayDelete(sevenDay, expiry, at(2027, 1, 8)));
+        check("final warning delivered, at expiry", true, p.mayDelete(sevenDay, expiry, expiry));
+        check("final warning delivered, long after", true, p.mayDelete(sevenDay, expiry, at(2027, 2, 1)));
+    }
+
+    static void deletionWaitsAfterALateWarning()
+    {
+        Policy p = new Policy(60, days(60, 30, 7), at(2026, 11, 10));
+        Date expiry = at(2027, 1, 9);
+        // The 7 day warning only went out on 6 January (the mail server was down), so the page gets a full 7 days from then.
+        long[] late = new long[] {expiry.getTime(), at(2027, 1, 6).getTime(), 7L};
+        check("expiry passed but the waiting period has not", false, p.mayDelete(late, expiry, at(2027, 1, 10)));
+        check("one day before the waiting period ends", false, p.mayDelete(late, expiry, at(2027, 1, 12)));
+        check("waiting period over", true, p.mayDelete(late, expiry, at(2027, 1, 13)));
+        check("delete date is the later of the two", at(2027, 1, 13), p.deleteDate(expiry, at(2027, 1, 6)));
+        check("on time warning leaves expiry as the date", expiry, p.deleteDate(expiry, at(2027, 1, 2)));
+        // A page that turns up already past its expiry is warned on 20 January and may not go before 27 January.
+        long[] catchUp = new long[] {at(2026, 12, 1).getTime(), at(2027, 1, 20).getTime(), 7L};
+        check("catch-up warning, same day", false, p.mayDelete(catchUp, at(2026, 12, 1), at(2027, 1, 20)));
+        check("catch-up warning, six days on", false, p.mayDelete(catchUp, at(2026, 12, 1), at(2027, 1, 26)));
+        check("catch-up warning, seven days on", true, p.mayDelete(catchUp, at(2026, 12, 1), at(2027, 1, 27)));
+    }
+
+    static void aKeptPageIsNeverDeletable()
+    {
+        Policy p = new Policy(60, days(60, 30, 7), at(2026, 11, 10));
+        Date oldExpiry = at(2027, 1, 9);
+        long[] entry = new long[] {oldExpiry.getTime(), at(2027, 1, 2).getTime(), 7L};
+        // Someone edited the page, so its expiry moved five years on.
+        Date newExpiry = at(2032, 1, 9);
+        check("expiry moved, entry no longer matches", false, p.finalWarned(entry, newExpiry));
+        check("and so no deletion", false, p.mayDelete(entry, newExpiry, at(2032, 2, 1)));
+        check("entry matches its own expiry", true, p.finalWarned(entry, oldExpiry));
+    }
+
+    static void finalWindowStartsAtTheShortestWarning()
+    {
+        Policy p = new Policy(60, days(60, 30, 7), at(2026, 11, 10));
+        Date now = at(2027, 1, 1);
+        check("past expiry", true, p.inFinalWindow(at(2026, 12, 1), now));
+        check("exactly now", true, p.inFinalWindow(now, now));
+        check("seven days left", true, p.inFinalWindow(Policy.addDays(now, 7), now));
+        check("eight days left", false, p.inFinalWindow(Policy.addDays(now, 8), now));
     }
 }
